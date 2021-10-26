@@ -1,14 +1,18 @@
 blem = [10] #example value
 
-
 SIM_TIME = 12*30
+env = simpy.Environment(initial_time=SIM_TIME)
 EP_NAME_LIST = []
 TP_NAME_LIST = []
 BB_NAME_LIST = []
 CONTRACTS = {}
+CONTRACTS_r = {}
 AGENTS = {}
+AGENTS_r = {}
+DEMAND = {}
 MIX = {}
 TECHNOLOGIC = {}
+TECHNOLOGIC_r = {}
 rev_dict = {}
 r = 0.001
 POLICY_EXPIRATION_DATE = 12 * 10
@@ -18,6 +22,7 @@ M_CONTRACT_LIMIT = 2 * 12
 AUCTION_WANTED_SOURCES = []
 AMMORT = 20 * 12
 NPV_THRESHOLD = 0
+NPV_THRESHOLD_DBB = 0
 INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 4: [4], 5: [5], 45: [4, 5], 1245: [1, 2, 4, 5]}
 BASEL = 0.105
 MARGIN = .1

@@ -1,35 +1,36 @@
+import config
+
+
 class TP(object):
-    def __init__(self, env):
+    def __init__(self, env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, cap_conditions, strategy, dd_strategies):
         self.env = env
-        self.name = STARTING_NAME  # name of the agent, is a string, normally something like TP_01
+        self.name = name  # name of the agent, is a string, normally something like TP_01
         self.genre = 'TP'  # genre, we do not use type, because type is a dedicated command of python, is also a string
-        self.subgenre = STARTING_TECHNOLOGY.get(
-            'source')  # subgenre or source, we used to use subgenre a lot, now it's kind of a legacy. Is a number, 1 is wind, 2 is solar, 4 is biomass and 5 is hydrogen. 0 and 3 are not used because they are the fossil options
-        self.wallet = STARTING_WALLET  # wallet or reserves, or savings, etc. How much the agent has? is a number
+        self.Technology = Technology  # the technology dict. Is a dictionary with the characteristics of the technology
+        self.subgenre = Technology['source']  # subgenre or source, we used to use subgenre a lot, now it's kind of a legacy. Is a number, 1 is wind, 2 is solar, 4 is biomass and 5 is hydrogen. 0 and 3 are not used because they are the fossil options
+        self.wallet = wallet  # wallet or reserves, or savings, etc. How much the agent has? is a number
         self.profits = 0  # profits of the agent, is a number
-        self.capacity = STARTING_CAPACITY  # productive capacity of the agent, is a number used to determine the CAPEX of its technology
+        self.capacity = capacity  # productive capacity of the agent, is a number used to determine the CAPEX of its technology
         self.RandD = 0  # how much money was put into R&D? Is a number
-        self.EorM = STARTING_TECHNOLOGY.get(
-            'EorM')  # does the agent use electricity or molecules? is a string (either 'E' or 'M') and is used a lot
+        self.EorM = Technology['EorM']  # does the agent use electricity or molecules? is a string (either 'E' or 'M') and is used a lot
         self.innovation_index = 0  # index of innovation. Kind of a legacy, was used to analyze innovation
-        self.Technology = STARTING_TECHNOLOGY  # the technology dict. Is a dictionary with the characteristics of the technology
         self.self_NPV = {}  # The NPV of a unit of investment. Is a dictionary: e.g. self_NPV={'value' : 2000, 'MWh' : 30}
-        self.RnD_threshold = STARTING_RnD_THRESHOLD  # what is the threshold of R&D expenditure necessary to innovate? Is a number
-        self.capacity_threshold = STARTING_CAPACITY_THRESHOLD  # what is the threshold of investment in productive capacity in order to start decreasing CAPEX costs?
-        self.dd_profits = {0: 0, 1: 0, 2: 0} if STARTING_TECHNOLOGY.get('EorM') == 'E' else {3: 0, 4: 0,
+        self.RnD_threshold = RnD_threshold  # what is the threshold of R&D expenditure necessary to innovate? Is a number
+        self.capacity_threshold = capacity_threshold  # what is the threshold of investment in productive capacity in order to start decreasing CAPEX costs?
+        self.dd_profits = {0: 0, 1: 0, 2: 0} if Technology.get('EorM') == 'E' else {3: 0, 4: 0,
                                                                                              5: 0}  # same as profits, but as dict. Makes accounting faster and simpler
-        self.dd_source = STARTING_DD_SOURCE  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
-        self.decision_var = STARTING_DECISION_VAR  # this is the value of the decision variable. Is a number between -1 and 1
+        self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
+        self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
         self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add'
-        self.dd_responsiveness = STARTING_RESPONSIVENESS  # this is the responsiveness, follows the current ranked dictionary
-        self.dd_qual_vars = STARTING_QUAL_VARS  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
-        self.dd_backwardness = STARTING_BACKWARDNESS  # also a ranked dictionary, this one tells the backwardness of agents
-        self.dd_avg_time = STARTING_DD_AVG_TIME  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
-        self.dd_discount = STARTING_DISCOUNT  # discount factor. Is a ranked dictionary
-        self.cap_conditions = STARTING_CAP_CONDITIONS  # there are the cap conditions for this technology, being a dictionary following this example {'char' : 'CAPEX', 'cap' : 20000, 'increase' : 0.5}
+        self.dd_responsiveness = dd_responsiveness  # this is the responsiveness, follows the current ranked dictionary
+        self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
+        self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
+        self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
+        self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
+        self.cap_conditions = cap_conditions  # there are the cap conditions for this technology, being a dictionary following this example {'char' : 'CAPEX', 'cap' : 20000, 'increase' : 0.5}
         self.capped = False  # boolean variable to make the capping easier
-        self.strategy = STARTING_STRATEGY  # the initial strategy of the agent, can be to reivnest into producetive capacity or R&D
-        self.dd_strategies = STARTING_STRATEGIES  # initial strategy for the technology provider. Is a ranked dictionary
+        self.strategy = strategy  # the initial strategy of the agent, can be to reivnest into producetive capacity or R&D
+        self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
 
         self.action = env.process(self.run_TP(
             self.name,
