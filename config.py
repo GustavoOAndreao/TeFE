@@ -1,7 +1,8 @@
 blem = [10] #example value
 
 SIM_TIME = 12*30
-env = simpy.Environment(initial_time=SIM_TIME)
+STARTING_TIME = 0
+env = simpy.Environment(initial_time=STARTING_TIME)
 EP_NAME_LIST = []
 TP_NAME_LIST = []
 BB_NAME_LIST = []
@@ -32,4 +33,3 @@ KICKSTART_ADDITION = {'E': INITIAL_DEMAND.get('E') / 5,
 STARTING_PRICE = 25
 RADICAL_THRESHOLD = 2
 RISKS = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-NAMES = {'EP': [], 'TP': [], 'BB': []}

@@ -89,7 +89,9 @@ def new_targeting_FF(name):
 
 
 def finding_FF(complete_dictionary, what,
-               how='highest', cond_dict={}):
+               how='highest', cond_dict=None):
+    if cond_dict is None:
+        cond_dict = {}
     whats, whos, completes = [], [], []
 
     for _ in complete_dictionary:
@@ -603,10 +605,9 @@ def private_deciding_FF(name):
 
     genre = AGENTS[env.now - 1][name]["genre"]
 
-    owns, means, sums = 0, 0, 0
+    means, sums = 0, 0
 
     for period in range(start, end):
-        owns += AGENTS[period][name]["profits"] * ((1 - discount) ** (end - 1 - period)) if name in AGENTS[period] else 0
         sums += finding_FF(AGENTS[period], 'profits', 'sum', {'genre': genre}) * ((1 - discount) ** (end - 1 - period))
 
     if genre == 'BB':
@@ -620,7 +621,7 @@ def private_deciding_FF(name):
     owns /= (end - start)
     sums /= (end - start)
 
-    ratio = (means - owns) / sums
+    ratio = (means - AGENTS[end][name]["profits"]) / sums
 
     new_value = responsivity * ratio + (1 - responsivity) * previous_var
 
@@ -644,37 +645,37 @@ def public_deciding_FF(name):
     eta_acc = now['dd_eta']['current']
     responsivity = now['dd_responsivities']['current']
     previous_var = now['decision_var']
+    SorT = now['dd_SorT']['current']
 
     t_1, t_2 = AGENTS_r[name][env.now - 1 - avg_time], AGENTS_r[name][env.now - 1 - 2 * avg_time]
 
     ratio = previous_var
 
     if (2 * avg_time > env.now - 1 and t_1['dd_rationale']['current'] == t_2['dd_rationale']['current'] == rationale and
-            t_1['dd_target']['current'] == t_2['dd_target']['current'] == target):
-        # three conditions must be filled: we must have two avg_time cycles in order to compare then (normally 2 years), and that cycle must have the same rationale and the same target, otherwise the policy maker changed rationale or the target was changed. If they are not filled, ratio remains as zero which tells the policy maker to keep doing whatever
-
+            t_1['dd_target']['current'] == t_2['dd_target']['current'] == target and t_1['dd_SorT']['current'] == t_2['dd_SorT']['current']):
+        # three conditions must be filled: we must have two avg_time cycles in order to compare then (normally 2 years), and that cycle must have the same rationale and the same target, otherwise the policy maker changed rationale or the target was chaned. If they are not filled, ratio remains as zero which tells the policy maker to keep doing whatever
         if rationale == 'green':
             # the policy maker wants less emissions
             dictionary = MIX
             restriction = {'status': 'contracted'}
             rationale = 'avoided'
-
         else:
             dictionary = AGENTS
             restriction = {'genre': 'TP'}
             rationale = 'RandD' if rationale == 'innovation' else 'capacity'
-
-        etas = []
+        results = []
         for period in range(env.now - 1 - avg_time, env.now - 1):
             current = finding_FF(dictionary.get(period), rationale, 'sum', restriction)
             before = finding_FF(dictionary.get(period - avg_time), rationale, 'sum', restriction)
-            increase = (current - before) / before
+            if SorT == 'T':
+                increase = (current - before) / before
+                eta_exp = target / ((1 + increase) * current)
+                results.append(eta_exp)
+            else:
+                increase = (current - before)
+                results.append(increase)
 
-            eta_exp = target / ((1 + increase) * current)
-
-            etas.append(eta_exp)
-
-        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(etas)) - env.now)) ** responsivity
+        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(etas)) - env.now)) ** responsivity if SorT == 'T' else (np.mean(results) - results[-1]) / statistics.stdev(results)
 
     new_value = responsivity * ratio + (1 - responsivity) * previous_var
 

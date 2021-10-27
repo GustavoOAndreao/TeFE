@@ -53,7 +53,6 @@ class TP(object):
         self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
 
         self.action = env.process(self.run_TP(
-            self.env,
             self.name,
             self.genre,
             self.subgenre,
@@ -81,7 +80,6 @@ class TP(object):
             self.dd_strategies))
 
     def run_TP(self,
-               env,
                name,
                genre,
                subgenre,
@@ -108,7 +106,7 @@ class TP(object):
                capped,
                dd_strategies):
 
-        CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, TACTIC_DISCOUNT, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD= config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.TACTIC_DISCOUNT, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD # globals
+        CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, TACTIC_DISCOUNT, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.TACTIC_DISCOUNT, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env # globals
 
         while True:
 
@@ -338,32 +336,33 @@ class TP(object):
 
 
 class TPM(object):
-    def __init__(self, env):
+    def __init__(self, env, wallet, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, dd_SorT):
         self.env = env
         self.genre = 'TPM'
         self.subgenre = 'TPM'
         self.name = 'TPM'
-        self.wallet = STARTING_WALLET
-        self.dd_policy = STARTING_DD_POLICY
-        self.dd_source = STARTING_DD_SOURCE
-        self.decision_var = STARTING_DECISION_VAR
-        self.disclosed_var = STARTING_DECISION_VAR
+        self.wallet = wallet
+        self.dd_policy = dd_policy
+        self.dd_source = dd_source
+        self.decision_var = decision_var
+        self.disclosed_var = decision_var
         self.action = 'keep'
-        self.dd_responsiveness = STARTING_DD_RESPONSIVENESS
-        self.dd_qual_vars = STARTING_DD_QUAL_VARS
-        self.dd_backwardness = STARTING_DD_BACKWARDNESS
-        self.dd_avg_time = STARTING_DD_AVG_TIME
-        self.dd_discount = STARTING_DD_DISCOUNT
-        self.dd_policy = STARTING_DD_POLICY
-        self.policies = STARTING_POLICIES
-        self.dd_index = STARTING_DD_INDEX
+        self.dd_responsiveness = dd_responsiveness
+        self.dd_qual_vars = dd_qual_vars
+        self.dd_backwardness = dd_backwardness
+        self.dd_avg_time = dd_avg_time
+        self.dd_discount = dd_discount
+        self.policies = policies
+        self.dd_index = dd_index
         self.index_per_source = {1: 0, 2: 0, 4: 0, 5: 0}
-        self.dd_eta = STARTING_DD_ETA
-        self.dd_ambition = STARTING_DD_AMBITION
-        self.dd_target = STARTING_DD_TARGET
-        self.dd_rationale = STARTING_DD_RATIONALE
+        self.dd_eta = dd_eta
+        self.dd_ambition = dd_ambition
+        self.dd_target = dd_target
+        self.dd_rationale = dd_rationale
+        self.dd_SorT = dd_SorT
 
-        self.action = env.process(self.run_TPM(self.genre,
+        self.action = env.process(self.run_TPM(self.env,
+                                               self.genre,
                                                self.subgenre,
                                                self.name,
                                                self.wallet,
@@ -384,9 +383,11 @@ class TPM(object):
                                                self.dd_eta,
                                                self.dd_ambition,
                                                self.dd_target,
-                                               self.dd_rationale))
+                                               self.dd_rationale,
+                                               self.dd_SorT))
 
     def run_TPM(self,
+                env,
                 genre,
                 subgenre,
                 name,
@@ -407,17 +408,11 @@ class TPM(object):
                 dd_eta,
                 dd_ambition,
                 dd_target,
-                dd_rationale):
+                dd_rationale,
+                dd_SorT):
 
-        global CONTRACTS
-        global MIX
-        global AGENTS
-        global TECHNOLOGIC
-        global r
-        global POLICY_EXPIRATION_DATE
-        global AMMORT
-        global TACTIC_DISCOUNT
-        global INSTRUMENT_TO_SOURCE_DICT
+
+        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, AMMORT, TACTIC_DISCOUNT, INSTRUMENT_TO_SOURCE_DICT, env =  config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.AMMORT, config.TACTIC_DISCOUNT, config.INSTRUMENT_TO_SOURCE_DICT, config.env
 
         while True:
 
@@ -428,8 +423,7 @@ class TPM(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time,
-                                   dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
+            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
             policy = dd_policy['current']
             source = dd_source['current']
@@ -455,11 +449,7 @@ class TPM(object):
                     else:
                         # alright, that was the one that changed
 
-                        Policies = policymaking_FF(dd, Policies,
-                                                   disclosed_var) if action == 'change' else policymaking_FF(dd,
-                                                                                                             Policies,
-                                                                                                             disclosed_var,
-                                                                                                             add=True)
+                        Policies = policymaking_FF(striked[entry], Policies, disclosed_var) if action == 'change' else policymaking_FF(striked[entry], Policies,disclosed_var,add=True)
 
                 action = 'keep'  # we already changed, now back to business
 
@@ -618,6 +608,7 @@ class EPM(object):
         self.dd_target = STARTING_DD_TARGET
         self.dd_rationale = STARTING_DD_RATIONALE
         self.auction_capacity = STARTING_AUCTION_CAPACITY
+        self.dd_SorT = popopo
 
         self.action = env.process(self.run_EPM(self.genre,
                                                self.subgenre,
@@ -645,7 +636,8 @@ class EPM(object):
                                                self.dd_ambition,
                                                self.dd_target,
                                                self.dd_rationale,
-                                               self.auction_capacity))
+                                               self.auction_capacity,
+                                               self.dd_SorT))
 
     def run_EPM(self,
                 genre,
@@ -674,7 +666,8 @@ class EPM(object):
                 dd_ambition,
                 dd_target,
                 dd_rationale,
-                auction_capacity):
+                auction_capacity,
+                dd_SorT):
 
         global CONTRACTS
         global MIX
@@ -724,7 +717,7 @@ class EPM(object):
                     else:
                         # alright, that was the one that changed
 
-                        Policies = policymaking_FF(dd, Policies,
+                        Policies = policymaking_FF(striked[entry], Policies,
                                                    disclosed_var) if action == 'change' else policymaking_FF(dd,
                                                                                                              Policies,
                                                                                                              disclosed_var,
@@ -1015,6 +1008,7 @@ class DBB(object):
         self.receivable = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
         self.accepted_sources = ACCEPTED_SOURCES
         self.car_ratio = 0
+        self.dd_SorT = popopo
 
         self.action = env.process(self.run_DBB(self.NPV_THRESHOLD_DBB,
                                                self.guaranteed_contracts,
@@ -1044,7 +1038,8 @@ class DBB(object):
                                                self.Portfolio,
                                                self.receivable,
                                                self.accepted_sources,
-                                               self.car_ratio))
+                                               self.car_ratio,
+                                               self.dd_SorT))
 
     def run_DBB(self,
                 NPV_THRESHOLD_DBB,
@@ -1075,7 +1070,8 @@ class DBB(object):
                 Portfolio,
                 receivable,
                 accepted_sources,
-                car_ratio):
+                car_ratio,
+                dd_SorT):
 
         global CONTRACTS
         global MIX
@@ -1762,10 +1758,10 @@ class EP(object):
                             'retirement': k['lifetime'] + k['building_time'] + 1 + env.now
                         })
                         """ moreover, if it is a molecule project, the price is pre-fixed """
-                        if i['EorM') == 'M':
+                        if i['EorM'] == 'M':
                             k.update({'price': (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) * SAV[2]})
                         portfolio_of_plants.update({code: k})
-                        capacity.update({k['source']: capacity[k['source']) + k['capacity')})
+                        capacity.update({k['source']: capacity[k['source']] + k['capacity']})
                         MW_dict.update({env.now: MW_dict[env.now] + k['capacity']})
 
                         code = uuid.uuid4().int
@@ -1812,8 +1808,8 @@ class EP(object):
                         plant = portfolio_of_plants[_]
                         if plant['status'] == 'built':
                             capacity_t += plant['capacity']
-                    demmand_t = DEMAND[env.now - 1)[EorM]
-                    demmand_t_p = DEMAND[last_acquisition_period)[EorM]
+                    demmand_t = DEMAND[env.now - 1][EorM]
+                    demmand_t_p = DEMAND[last_acquisition_period][EorM]
                     capacity_t_p = MW_dict[last_acquisition_period]
 
                     capacity_to_add = (capacity_t * (1 + value) * demmand_t / demmand_t_p) - capacity_t_p
@@ -1832,10 +1828,10 @@ class EP(object):
                       }
                 for _ in TECHNOLOGIC[env.now - 1]:
                     i = TECHNOLOGIC[env.now - 1][_]
-                    if i['source') == source:
+                    if i['source'] == source:
                         subgenre_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
                         Lumps = np.ceil(capacity_to_add / i['MW'])
-                        price = subgenre_price[i['source'])
+                        price = subgenre_price[i['source']]
                         NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
                         if NPV > TP['NPV'] or TP['NPV'] == False:
                             TP.update({
@@ -1868,7 +1864,7 @@ class EP(object):
                 """ and now we send that project to the bank """
                 if capacity_to_add > 0:
                     # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the whole project
-                    project = TECHNOLOGIC[env.now - 1][TP['TP']).copy()
+                    project = TECHNOLOGIC[env.now - 1][TP['TP']].copy()
                     # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
                     project.update({
                         'sender': name,
@@ -1882,7 +1878,7 @@ class EP(object):
                         'status': 'project',
                         'capacity': Lumps * project['MW'],
                         'MWh': Lumps * project['MW'] * 24 * 30 * project['CF']})
-                    if TP['source_of_TP') in AUCTION_WANTED_SOURCES:
+                    if TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
                         project.update(
                             {'status': 'bidded',
                              'receiver': 'EPM'})
