@@ -261,7 +261,7 @@ class TP(object):
 
             if len(MIX[env.now - 1]):
                 # if there is no capping, we must first make sure that it has not started
-                now = finding_FF(MIX[env.now - 1], 'MW', 'sum', {'EP': name})
+                now = finding_FF(MIX[env.now - 1], 'MW', 'sum', {'EP': name})['value']
                 if now > cap_conditions['cap']:
                     capped = True
 
@@ -270,7 +270,7 @@ class TP(object):
 
             if capped == True:
                 # capping process is on, so we have to make sure that the capacity increased
-                previous = finding_FF(MIX[env.now - 2], 'MW', 'sum', {'EP': name})
+                previous = finding_FF(MIX[env.now - 2], 'MW', 'sum', {'EP': name})['value']
 
                 if now > previous:
                     # the capacity increased, so we have to apply the capping conditions

@@ -261,8 +261,8 @@ def private_reporting_FF(genre,
         # we have the highest MW in order to compare things, the maximum price
         technology = TECHNOLOGIC.get(env.now - 1).get(TP)
         demand_now = DEMAND.get(technology.get('EorM'))
-        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'source': source})
-        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM}) if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to the get the highest price for the eletrcitity or molecule part.
+        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'source': source})['value']
+        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM})['value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to the get the highest price for the eletrcitity or molecule part.
         lumps = np.floor(demand_now / technology['MW'])
 
         NPV = npv_generating_FF(r, technology.get('lifetime'), lumps, technology.get('MW'), technology.get('building_time'), technology.get('CAPEX') * lumps, technology.get('OPEX') * lumps, max_price, technology.get('CF'), AMMORT)
@@ -285,10 +285,7 @@ def private_reporting_FF(genre,
     for source in Sources:
         specific_profits = 'profits' + str(source)  # we have to get the profits for that source of the
         current = finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum',
-                             {'genre': genre}) if EorM == 'No' else finding_FF(AGENTS.get(env.now - 1),
-                                                                                specific_profits, 'sum',
-                                                                                {'genre': genre,
-                                                                                 'EorM': EorM})  # we now have the current profits for that source in that agent
+                             {'genre': genre})['value'] if EorM == 'No' else finding_FF(AGENTS.get(env.now - 1),specific_profits, 'sum',{'genre': genre, 'EorM': EorM})['value']  # we now have the current profits for that source in that agent
         current += Sources[source]  # we now add to the current profits what we had
         backward_dict.update({source: current})  # and update the backward_dict dictionary
 
@@ -605,23 +602,14 @@ def private_deciding_FF(name):
 
     genre = AGENTS[env.now - 1][name]["genre"]
 
-    means, sums = 0, 0
+    profits, medians = [], []
 
     for period in range(start, end):
-        sums += finding_FF(AGENTS[period], 'profits', 'sum', {'genre': genre}) * ((1 - discount) ** (end - 1 - period))
+        for i in ('highest', 'lowest'):
+            profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * ((1 - discount) ** (end - 1 - period)))
+            medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * ((1 - discount) ** (end - 1 - period)))
 
-    if genre == 'BB':
-        means += sums / len(BB_NAME_LIST)
-    elif genre == 'EP':
-        means += sums / len(EP_NAME_LIST)
-    else:
-        means += sums / len(TP_NAME_LIST)
-
-    means /= (end - start)
-    owns /= (end - start)
-    sums /= (end - start)
-
-    ratio = (means - AGENTS[end][name]["profits"]) / sums
+    ratio = (np.mean(medians) - AGENTS[end][name]["profits"]) / (max(profits - min(profits)))
 
     new_value = responsivity * ratio + (1 - responsivity) * previous_var
 
@@ -665,8 +653,8 @@ def public_deciding_FF(name):
             rationale = 'RandD' if rationale == 'innovation' else 'capacity'
         results = []
         for period in range(env.now - 1 - avg_time, env.now - 1):
-            current = finding_FF(dictionary.get(period), rationale, 'sum', restriction)
-            before = finding_FF(dictionary.get(period - avg_time), rationale, 'sum', restriction)
+            current = finding_FF(dictionary.get(period), rationale, 'sum', restriction)['value']
+            before = finding_FF(dictionary.get(period - avg_time), rationale, 'sum', restriction)['value']
             if SorT == 'T':
                 increase = (current - before) / before
                 eta_exp = target / ((1 + increase) * current)
@@ -675,7 +663,7 @@ def public_deciding_FF(name):
                 increase = (current - before)
                 results.append(increase)
 
-        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(etas)) - env.now)) ** responsivity if SorT == 'T' else (np.mean(results) - results[-1]) / statistics.stdev(results)
+        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** responsivity if SorT == 'T' else (np.mean(results) - results[-1]) / (max(results) - min(results))
 
     new_value = responsivity * ratio + (1 - responsivity) * previous_var
 
@@ -699,7 +687,7 @@ def current_stating_FF(rationale):
         restriction = {'genre': 'TP'}
         rationale = 'RandD' if rationale == 'innovation' else 'capacity'
 
-    current_state = finding_FF(dictionary.get(env.now - 1), rationale, 'sum', restriction)
+    current_state = finding_FF(dictionary.get(env.now - 1), rationale, 'sum', restriction)['value']
 
     return current_state
 
