@@ -330,7 +330,8 @@ class TP(object):
             }})
 
             profits_dedicting_FF(name)
-            post_evaluating_FF(decisions['strikes'], name)
+            if env.now>0:
+                post_evaluating_FF(decisions['strikes'], name)
 
             yield env.timeout(1)
 
@@ -449,7 +450,7 @@ class TPM(object):
                     else:
                         # alright, that was the one that changed
 
-                        Policies = policymaking_FF(striked[entry], Policies, disclosed_var) if action == 'change' else policymaking_FF(striked[entry], Policies,disclosed_var,add=True)
+                        policies = policymaking_FF(striked[entry], policies, disclosed_var) if action == 'change' else policymaking_FF(striked[entry], policies,disclosed_var,add=True)
 
                 action = 'keep'  # we already changed, now back to business
 
@@ -485,7 +486,7 @@ class TPM(object):
                         incentive = budget / len(firms)
 
                         """ and now we give out the incentives"""
-                        for TP in incentivised_firms:
+                        for TP in firms:
                             code = uuid.uuid4().int
                             CONTRACTS[env.now].update({
                                 code: {
@@ -500,8 +501,8 @@ class TPM(object):
                     print('TBD')
 
                 """ and now back to the actual variables for the current policy"""
-                instrument = Policies[0]['instrument']
-                source = Policies[0]['source']
+                instrument = policy_pool[0]['instrument']
+                source = policy_pool[0]['source']
                 value = disclosed_var
 
             #################################################################
@@ -525,7 +526,7 @@ class TPM(object):
 
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
-                disclosed_var = thresholding_FF(responsivity, disclosed_var, decision_var)
+                disclosed_var = thresholding_FF(responsiveness, disclosed_var, decision_var)
 
             #################################################################
             #                                                               #
@@ -549,7 +550,6 @@ class TPM(object):
                     "dd_backwardness": dd_backwardness,
                     "dd_avg_time": dd_avg_time,
                     "dd_discount": dd_discount,
-                    "dd_policy": dd_policy,
                     "policies": policies,
                     "dd_index": dd_index,
                     "index_per_source": index_per_source,
@@ -557,8 +557,6 @@ class TPM(object):
                     "dd_ambition": dd_ambition,
                     "dd_target": dd_target,
                     "dd_rationale": dd_rationale,
-                    "decision_var": decision_var,
-                    "disclosed_var": disclosed_var,
                     "policy": policy,
                     "source": source,
                     "responsiveness": responsiveness,
@@ -571,44 +569,44 @@ class TPM(object):
                     "rationale": rationale,
                     "value": value,
                 }})
-
-            post_evaluating_FF(decisions['strikes'], name)
+            if env.now > 0:
+                post_evaluating_FF(decisions['strikes'], name)
 
             yield env.timeout(1)
 
 
 class EPM(object):
-    def __init__(self, env):
+    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, dd_policy, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, auction_capacity, dd_SorT):
         self.env = env
         self.genre = 'EPM'
         self.subgenre = 'EPM'
         self.name = 'EPM'
-        self.wallet = STARTING_WALLET
-        self.PPA_expiration = STARTING_PPA_LIMIT
-        self.PPA_limit = STARTING_PPA_LIMIT
+        self.wallet = wallet
+        self.PPA_expiration = PPA_expiration
+        self.PPA_limit = PPA_limit
         self.auction_countdown = 0
         self.auction_time = False
-        self.COUNTDOWN = STARTING_COUNTDOWN
-        self.dd_policy = STARTING_DD_POLICY
-        self.dd_source = STARTING_DD_SOURCE
-        self.decision_var = STARTING_DECISION_VAR
-        self.disclosed_var = STARTING_DECISION_VAR
+        self.COUNTDOWN = COUNTDOWN
+        self.dd_policy = dd_policy
+        self.dd_source = dd_source
+        self.decision_var = decision_var
+        self.disclosed_var = decision_var
         self.action = 'keep'
-        self.dd_responsiveness = STARTING_DD_RESPONSIVENESS
-        self.dd_qual_vars = STARTING_DD_QUAL_VARS
-        self.dd_backwardness = STARTING_DD_BACKWARDNESS
-        self.dd_avg_time = STARTING_DD_AVG_TIME
-        self.dd_discount = STARTING_DD_DISCOUNT
-        self.dd_policy = STARTING_DD_POLICY
-        self.policies = STARTING_POLICIES
-        self.dd_index = STARTING_DD_INDEX
+        self.dd_responsiveness = dd_responsiveness
+        self.dd_qual_vars = dd_qual_vars
+        self.dd_backwardness = dd_backwardness
+        self.dd_avg_time = dd_avg_time
+        self.dd_discount = dd_discount
+        self.policies = policies
+        self.dd_index = dd_index
         self.index_per_source = {1: 0, 2: 0, 4: 0, 5: 0}
-        self.dd_eta = STARTING_DD_ETA
-        self.dd_ambition = STARTING_DD_AMBITION
-        self.dd_target = STARTING_DD_TARGET
-        self.dd_rationale = STARTING_DD_RATIONALE
-        self.auction_capacity = STARTING_AUCTION_CAPACITY
-        self.dd_SorT = popopo
+        self.dd_eta = dd_eta
+        self.dd_ambition = dd_ambition
+        self.dd_target = dd_target
+        self.dd_rationale = dd_rationale
+        self.auction_capacity = auction_capacity
+        self.dd_SorT = dd_SorT
+
 
         self.action = env.process(self.run_EPM(self.genre,
                                                self.subgenre,
@@ -669,17 +667,7 @@ class EPM(object):
                 auction_capacity,
                 dd_SorT):
 
-        global CONTRACTS
-        global MIX
-        global AGENTS
-        global TECHNOLOGIC
-        global DEMAND
-        global M_CONTRACT_LIMIT
-        global AUCTION_WANTED_SOURCES
-        global AMMORT
-        global TACTIC_DISCOUNT
-        global INSTRUMENT_TO_SOURCE_DICT
-        global MARGIN
+        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, DEMAND, M_CONTRACT_LIMIT, AUCTION_WANTED_SOURCES, AMMORT, TACTIC_DISCOUNT, INSTRUMENT_TO_SOURCE_DICT, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.DEMAND, config.M_CONTRACT_LIMIT, config.AUCTION_WANTED_SOURCES, config.AMMORT, config.TACTIC_DISCOUNT, config.INSTRUMENT_TO_SOURCE_DICT, config.MARGIN, config.env #globals
 
         while True:
 
@@ -690,8 +678,7 @@ class EPM(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time,
-                                   dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
+            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
             policy = dd_policy['current']
             source = dd_source['current']
@@ -717,11 +704,8 @@ class EPM(object):
                     else:
                         # alright, that was the one that changed
 
-                        Policies = policymaking_FF(striked[entry], Policies,
-                                                   disclosed_var) if action == 'change' else policymaking_FF(dd,
-                                                                                                             Policies,
-                                                                                                             disclosed_var,
-                                                                                                             add=True)
+                        policies = policymaking_FF(striked[entry], policies,
+                                                   disclosed_var) if action == 'change' else policymaking_FF(dd, policies, disclosed_var, add=True)
 
                 action = 'keep'  # we already changed, now back to business
 
@@ -931,6 +915,9 @@ class EPM(object):
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
                 disclosed_var = thresholding_FF(responsivity, disclosed_var, decision_var)
+                decisions = evaluating_FF(name)
+
+                action = decisions['action']
 
             #################################################################
             #                                                               #
@@ -970,45 +957,45 @@ class EPM(object):
                 "instrument": instrument,
                 "source": source,
             }})
-
-            post_evaluating_FF(decisions['strikes'], name)
+            if env.now > 0:
+                post_evaluating_FF(decisions['strikes'], name)
 
             yield env.timeout(1)
 
 
 class DBB(object):
-    def __init__(self, env):
+    def __init__(self, env, wallet, dd_policy, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, Portfolio, accepted_sources, dd_SorT):
         self.env = env
         self.NPV_THRESHOLD_DBB = STARTING_NPV_THRESHOLD_DBB
         self.guaranteed_contracts = []
         self.genre = 'DBB'
         self.subgenre = 'DBB'
         self.name = 'DBB'
-        self.wallet = STARTING_WALLET
-        self.dd_policy = STARTING_DD_POLICY
-        self.dd_source = STARTING_DD_SOURCE
-        self.decision_var = STARTING_DECISION_VAR
-        self.disclosed_var = STARTING_DECISION_VAR
+        self.wallet = wallet
+        self.dd_policy = dd_policy
+        self.dd_source = dd_source
+        self.decision_var = decision_var
+        self.disclosed_var = decision_var
         self.action = 'keep'
-        self.dd_responsiveness = STARTING_DD_RESPONSIVENESS
-        self.dd_qual_vars = STARTING_DD_QUAL_VARS
-        self.dd_backwardness = STARTING_DD_BACKWARDNESS
-        self.dd_avg_time = STARTING_DD_AVG_TIME
-        self.dd_discount = STARTING_DD_DISCOUNT
-        self.dd_policy = STARTING_DD_POLICY
-        self.policies = STARTING_POLICIES
-        self.dd_index = STARTING_DD_INDEX
+        self.dd_responsiveness = dd_responsiveness
+        self.dd_qual_vars = dd_qual_vars
+        self.dd_backwardness = dd_backwardness
+        self.dd_avg_time = dd_avg_time
+        self.dd_discount = dd_discount
+        self.dd_policy = dd_policy
+        self.policies = policies
+        self.dd_index = dd_index
         self.index_per_source = {1: 0, 2: 0, 4: 0, 5: 0}
-        self.dd_eta = STARTING_DD_ETA
-        self.dd_ambition = STARTING_DD_AMBITION
-        self.dd_target = STARTING_DD_TARGET
-        self.dd_rationale = STARTING_DD_RATIONALE
+        self.dd_eta = dd_eta
+        self.dd_ambition = dd_ambition
+        self.dd_target = dd_target
+        self.dd_rationale = dd_rationale
         self.financing_index = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        self.Portfolio = STARTING_PORTFOLIO
+        self.Portfolio = Portfolio
         self.receivable = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        self.accepted_sources = ACCEPTED_SOURCES
+        self.accepted_sources = accepted_sources
         self.car_ratio = 0
-        self.dd_SorT = popopo
+        self.dd_SorT = dd_SorT
 
         self.action = env.process(self.run_DBB(self.NPV_THRESHOLD_DBB,
                                                self.guaranteed_contracts,
@@ -1026,7 +1013,6 @@ class DBB(object):
                                                self.dd_backwardness,
                                                self.dd_avg_time,
                                                self.dd_discount,
-                                               self.dd_policy,
                                                self.policies,
                                                self.dd_index,
                                                self.index_per_source,
@@ -1058,7 +1044,6 @@ class DBB(object):
                 dd_backwardness,
                 dd_avg_time,
                 dd_discount,
-                dd_policy,
                 policies,
                 dd_index,
                 index_per_source,
@@ -1073,14 +1058,7 @@ class DBB(object):
                 car_ratio,
                 dd_SorT):
 
-        global CONTRACTS
-        global MIX
-        global AGENTS
-        global TECHNOLOGIC
-        global r
-        global POLICY_EXPIRATION_DATE
-        global INSTRUMENT_TO_SOURCE_DICT
-        global RISKS
+        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.env #globals
 
         while True:
 
@@ -1187,8 +1165,7 @@ class DBB(object):
 
             policy_pool = []
             policy_pool.append(policy)
-            policy_pool.append(
-                policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
+            policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
 
             if env.now >= 2:
                 for entry in policy_pool:
@@ -1211,8 +1188,8 @@ class DBB(object):
                         receivable = financing['receivables']
 
                     """ and now back to the actual variables for the current policy"""
-                instrument = Policies[0]['instrument']
-                source = Policies[0]['source']
+                instrument = policies[0]['instrument']
+                source = policies[0]['source']
                 value = disclosed_var
 
             #################################################################
@@ -1292,29 +1269,28 @@ class DBB(object):
 
 
 class BB(object):
-    def __init__(self, env):
+    def __init__(self, env, Portfolio, accepted_sources, name, wallet, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies):
         self.env = env
         self.financing_index = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        self.Portfolio = STARTING_PORTFOLIO
+        self.Portfolio = Portfolio
         self.receivable = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        self.accepted_sources = ACCEPTED_SOURCES
+        self.accepted_sources = accepted_sources
         self.car_ratio = 0
-        self.name = STARTING_NAME  # name of the agent, is a string, normally something like BB_01
+        self.name = name  # name of the agent, is a string, normally something like BB_01
         self.genre = 'BB'  # genre, we do not use type, because type is a dedicated command of python, is also a string
         self.subgenre = 'BB'
-        self.wallet = STARTING_WALLET  # wallet or reserves, or savings, etc. How much the agent has? is a number
+        self.wallet = wallet  # wallet or reserves, or savings, etc. How much the agent has? is a number
         self.profits = 0  # profits of the agent, is a number
-        self.dd_profits = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0,
-                           5: 0}  # same as profits, but as dict. Makes accounting faster and simpler
-        self.dd_source = STARTING_DD_SOURCE  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for 
-        self.decision_var = STARTING_DECISION_VAR  # this is the value of the decision variable. Is a number between -1 and 1
+        self.dd_profits = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}  # same as profits, but as dict. Makes accounting faster and simpler
+        self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
+        self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
         self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add' 
-        self.dd_responsiveness = STARTING_RESPONSIVENESS  # this is the responsiveness, follows the current ranked dictionary
-        self.dd_qual_vars = STARTING_QUAL_VARS  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
-        self.dd_backwardness = STARTING_BACKWARDNESS  # also a ranked dictionary, this one tells the backwardness of agents
-        self.dd_avg_time = STARTING_DD_AVG_TIME  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
-        self.dd_discount = STARTING_DISCOUNT  # discount factor. Is a ranked dictionary
-        self.dd_strategies = STARTING_STRATEGIES  # initial strategy for the technology provider. Is a ranked dictionary
+        self.dd_responsiveness = dd_responsiveness  # this is the responsiveness, follows the current ranked dictionary
+        self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
+        self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
+        self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
+        self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
+        self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
 
         self.action = env.process(self.run_BB(self.financing_index,
                                               self.Portfolio,
@@ -1360,17 +1336,7 @@ class BB(object):
                dd_discount,
                dd_strategies):
 
-        global CONTRACTS
-        global MIX
-        global AGENTS
-        global AGENTS_r
-        global TECHNOLOGIC
-        global r
-        global BASEL
-        global AMMORT
-        global TACTIC_DISCOUNT
-        global NPV_THRESHOLD
-        global RISKS
+        CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC,config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, onfig.NPV_THRESHOLD, config.RISKS, config.env # globals
 
         while True:
 
@@ -1500,13 +1466,13 @@ class BB(object):
                 "avg_time": avg_time,
                 "discount": discount,
                 "strategy": strategy,
-                "discount": discount,
                 "index": index,
                 "value": value,
             }})
 
             profits_dedicting_FF(name)
-            post_evaluating_FF(decisions['strikes'], name)
+            if env.now > 0:
+                post_evaluating_FF(decisions['strikes'], name)
 
             yield env.timeout(1)
 
@@ -1959,29 +1925,24 @@ class EP(object):
 
 
 class Demand(object):
-    def __init__(self, env):
+    def __init__(self, env, initial_demand, specificities):
         self.env = env
         self.genre = 'D'
         self.name = 'D'
-        self.initial_demand = INITIAL_DEMAND
-        self.specificities = DEMAND_SPECIFICITIES
-        self.action = env.process(self.run(self.genre,
-                                           self.name,
-                                           self.initial_demand,
-                                           self.specificities))
+        self.initial_demand = initial_demand
+        self.specificities = specificities
+        self.action = env.process(self.run_DD(self.genre,
+                                              self.name,
+                                              self.initial_demand,
+                                              self.specificities)),
 
-    def run(self,
-            genre,
-            name,
-            initial_demand,
-            specificities):
+    def run_DD(self,
+               genre,
+               name,
+               initial_demand,
+               specificities):
 
-        global CONTRACTS
-        global MIX
-        global AGENTS
-        global TECHNOLOGIC
-        global r
-        global DEMAND
+        CONTRACTS, MIX, AGENTS, ECHNOLOGIC, r, DEMAND, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.env
 
         while True:
 
