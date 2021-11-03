@@ -966,7 +966,7 @@ class EPM(object):
 class DBB(object):
     def __init__(self, env, wallet, dd_policy, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, Portfolio, accepted_sources, dd_SorT):
         self.env = env
-        self.NPV_THRESHOLD_DBB = STARTING_NPV_THRESHOLD_DBB
+        self.NPV_THRESHOLD_DBB = config.NPV_THRESHOLD_DBB
         self.guaranteed_contracts = []
         self.genre = 'DBB'
         self.subgenre = 'DBB'
@@ -1091,6 +1091,10 @@ class DBB(object):
 
                     if list_of_strikeables[entry]['current'] == striked[entry]:
                         # that dictionary was not the changed one, so we can just update it
+                        if entry == 'source':
+                            # we changed the source, so we have to update the accepted_sources dictionary
+                            source_accepting_FF(accepted_sources, source)
+                            source = dd_source['current']
                         list_of_strikeables[entry] = striked[entry]
 
                     else:
@@ -1186,6 +1190,7 @@ class DBB(object):
 
                         wallet = financing['wallet']
                         receivable = financing['receivables']
+                        financing_index = financing['financing_index']
 
                     """ and now back to the actual variables for the current policy"""
                 instrument = policies[0]['instrument']
@@ -1391,11 +1396,9 @@ class BB(object):
 
                 for entry in range(0, len(list_of_strikeables)):
                     list_of_strikeables[entry] = striked[entry]
-
-                if source != dd_source['current']:
-                    # we changed the source, so we have to update the accepted_sources dictionary
-                    source_accepting(accepted_sources, source)
-                    source = dd_source['current']
+                    if entry == 'source':
+                        # we changed the source, so we have to update the accepted_sources dictionary
+                        source_accepting_FF(accepted_sources, source)
                 action = 'keep'  # we already changed, now back to business
 
             #################################################################
@@ -1409,6 +1412,7 @@ class BB(object):
 
                 wallet = financing['wallet']
                 receivable = financing['receivables']
+                financing_index = financing['financing_index']
 
             #################################################################
             #                                                               #
@@ -1478,26 +1482,33 @@ class BB(object):
 
 
 class EP(object):
-    def __init__(self, env):
+    def __init__(self, env, accepted_sources, name, wallet, EorM, subgenre, project_lifetime, portfolio_of_plants, portfolio_of_projects, periodicity, to_add, tolerance, last_acquisition_period):
         self.env = env
         self.genre = 'EP'
-        self.subgenre = STARTING_SUBGENRE
-        self.name = STARTING_NAME
-        self.wallet = STARTING_WALLET
+        self.accepted_sources = accepted_sources
+        self.name = name
+        self.wallet = wallet
         self.profits = 0
-        self.EorM = STARTING_eORm
+        self.EorM = EorM
+        self.subgenre = EorM
         self.capacity = {0: 0, 1: 0, 2: 0} if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
-        self.Tactics = STARTING_TACTICS
-        self.SAV = STARTING_STRATEGY
-        self.project_lifetime = 12
-        self.portfolio_of_plants = {}
-        self.portfolio_of_projects = {}
-        self.periodicity = 3
-        self.MW_dict = STARTING_MW_dict
+        self.project_lifetime = project_lifetime
+        self.portfolio_of_plants = portfolio_of_plants
+        self.portfolio_of_projects = portfolio_of_projects
+        self.periodicity = periodicity
         self.subgenre_price = {0: 0, 1: 0, 2: 0} if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
-        self.capacity_to_add = 1
-        self.tolerance = 12
-        self.last_acquisition_period = 0
+        self.tolerance = tolerance
+        self.last_acquisition_period = last_acquisition_period
+        self.dd_profits = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}  # same as profits, but as dict. Makes accounting faster and simpler
+        self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
+        self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
+        self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add'
+        self.dd_responsiveness = dd_responsiveness  # this is the responsiveness, follows the current ranked dictionary
+        self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
+        self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
+        self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
+        self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
+        self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
 
         self.action = env.process(self.run_EP(self.genre,
                                               self.subgenre,
@@ -1537,20 +1548,56 @@ class EP(object):
                tolerance,
                last_acquisition_period,
                MW_dict):
+
         global CONTRACTS
         global MIX
         global AGENTS
         global TECHNOLOGIC
         global r
         global DEMAND
-        global KICKSTART_ADDITION
 
         while True:
 
+            #################################################################
+            #                                                               #
+            #     Before anything, we must the current values of each of    #
+            #        the dictionaries that we use and other variables       #
+            #                                                               #
+            #################################################################
+
+            list_of_strikeables = [dd_profits, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies]
+
+            source = dd_source['current']
+            responsiveness = dd_responsiveness['current']
+            qual_vars = dd_qual_vars['current']
+            backwardness = dd_backwardness['current']
+            avg_time = dd_avg_time['current']
+            discount = dd_discount['current']
+            strategy = dd_strategies['current']
+            discount = dd_discount['current']
+            index = indexing_FF('TPM') if env.now > 0 else dd_index['current']
+            value = decision_var
+            profits = 0  # in order to get the profits of this period alone
+
+            #################################################################
+            #                                                               #
+            #    Now, on to check if change is on and if there is a strike  #
+            #                                                               #
+            #################################################################
+
+            if env.now > 0 and (action == 'add' or 'change'):
+                striked = striking_FF(list_of_strikeables)
+
+                for entry in range(0, len(list_of_strikeables)):
+                    if entry == 'source':
+                        # we changed the source, so we have to update the accepted_sources dictionary
+                        source_accepting_FF(accepted_sources, source)
+                    list_of_strikeables[entry] = striked[entry]
+                action = 'keep'  # we already changed, now back to business
+
             #############################################################
             #                                                           #
-            #  First, the Energy producer collects its profits from the #
-            #      previous period and pays the OPEX of its plants      #
+            #                    Collecting profits                     #
             #                                                           #
             #############################################################
 
@@ -1591,7 +1638,7 @@ class EP(object):
             #############################################################
 
             """ before anything, we have to make sure that the MW_dict of this period has the same MW as the last period """
-            MW_dict.update({env.now + 1: MW_dict[env.now]})
+
             if len(portfolio_of_plants) > 0:
                 for _ in portfolio_of_plants:
                     i = portfolio_of_plants[_]
@@ -1639,6 +1686,7 @@ class EP(object):
                     if i['status'] == 'built':
                         j = i.copy()
                         MIX[env.now].update({_: j})
+
 
             #############################################################
             #                                                           #
@@ -1752,40 +1800,67 @@ class EP(object):
                             )
                         })
 
+            #################################################################
+            #                                                               #
+            #    Now, the EP analyses what happened to the system due to    #
+            #                       its intervention                        #
+            #                                                               #
+            #################################################################
+
+            add_source = source_reporting_FF(name)
+
+            for entry in dd_source['ranks']:
+                dd_source['ranks'][entry] *= (1 - discount)
+                dd_source['ranks'][entry] += add_source[entry]
+
+            #################################################################
+            #                                                               #
+            #          And then, the EP will decide what to do next         #
+            #                                                               #
+            #################################################################
+
+            if env.now > 0:
+                decision_var = max(0, min(1, private_deciding_FF(name)))
+
+            #############################################################
+            #                                                           #
+            #  Before leaving, the agent must update the outside world  #
+            #                                                           #
+            #############################################################
+
+            AGENTS[env.now].update({
+                name:
+                    {"genre": genre,
+                     "subgenre": subgenre,
+                     "name": name,
+                     "wallet": wallet,
+                     "profits": profits,
+                     "capacity": capacity,
+                     "EorM": EorM,
+                     "Tactics": Tactics[env.now],
+                     "SAV": SAV,
+                     "project_lifetime": project_lifetime,
+                     "portfolio_of_plants": portfolio_of_plants,
+                     "portfolio_of_projects": portfolio_of_projects,
+                     "periodicity": periodicity,
+                     "subgenre_price": subgenre_price,
+                     "capacity_to_add": capacity_to_add,
+                     "tolerance": tolerance}
+            })
+
+            profits_dedicting_FF(name)
+            if env.now > 0:
+                post_evaluating_FF(decisions['strikes'], name)
+
+            yield env.timeout(1)
+
             #############################################################
             #                                                           #
             #   Then, the Energy producer decides how much to invest    #
             #                                                           #
             #############################################################
 
-            source = SAV[0]
-            action = SAV[1]
-            value = SAV[2]
-
-            if action == 'change':
-                choice = min(np.random.poisson(1), 2)
-                source = sorted(list(Tactics[env.now - 1].items()), key=lambda x: x[1], reverse=True)[choice][0]
-
-            if (env.now % periodicity == 0 and env.now > 1 + periodicity) or env.now == 1:
-                """ first, we get how much would the energy producer like to insert"""
-                if env.now != 1:
-                    capacity_t = 0
-                    for _ in portfolio_of_plants:
-                        plant = portfolio_of_plants[_]
-                        if plant['status'] == 'built':
-                            capacity_t += plant['capacity']
-                    demmand_t = DEMAND[env.now - 1][EorM]
-                    demmand_t_p = DEMAND[last_acquisition_period][EorM]
-                    capacity_t_p = MW_dict[last_acquisition_period]
-
-                    capacity_to_add = (capacity_t * (1 + value) * demmand_t / demmand_t_p) - capacity_t_p
-
-                else:
-                    capacity_t = 0
-                    capacity_to_add = KICKSTART_ADDITION[EorM]
-
-                """  and then we get which EP to try"""
-
+            if env.now % periodicity == 0 and env.now > 1 + periodicity and decision_var > 0 and wallet > 0:
                 TP = {'TP': 0,
                       'NPV': False,
                       'Lumps': 0,
@@ -1794,10 +1869,10 @@ class EP(object):
                       }
                 for _ in TECHNOLOGIC[env.now - 1]:
                     i = TECHNOLOGIC[env.now - 1][_]
-                    if i['source'] == source:
-                        subgenre_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
-                        Lumps = np.ceil(capacity_to_add / i['MW'])
-                        price = subgenre_price[i['source']]
+                    if accepted_sources[i['source']] == True:
+                        source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
+                        Lumps = np.ceil((decision_var * DEMAND[EorM]) / i['MW'])
+                        price = source_price[i['source']]
                         NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
                         if NPV > TP['NPV'] or TP['NPV'] == False:
                             TP.update({
@@ -1863,7 +1938,11 @@ class EP(object):
                     BB_list.append(j['name'])
                 for bank in i['failed_attempts']:
                     BB_list.remove(bank)
-                BB = BB_list[number] if number < len(BB_list) else BB_list[-1]
+                if len(BB_list) > 0 and number < len(BB_list):
+                    BB = BB_list[number]
+                else :
+                    BB = BB_list[-1] if len(BB_list) > 0 else random.choice(BB_NAME_LIST) #if there are items in the list, it chooses the last one, if not, it simply chooses randomly from the possible banks
+                elif
                 project = i.copy()
                 project.update({'sender': name,
                                 'receiver': BB,
@@ -1872,55 +1951,6 @@ class EP(object):
                     project['code']: {project}
                 })
 
-            #############################################################
-            #                                                           #
-            #   Afterwards, the Energy provider evaluates the context   #
-            #                                                           #
-            #############################################################
-
-            if env.now > 0:
-                vote = voting(genre, env.now, name, EorM)
-                for Source in list(Tactics[0].keys()):
-                    Tactics[env.now].update(
-                        {Source: Tactics[env.now - 1][Source] * TACTIC_DISCOUNT + vote[Source]})
-
-            #############################################################
-            #                                                           #
-            #   And finally, the Energy producer decides what to do in  #
-            #                      the next period                      #
-            #                                                           #
-            #############################################################
-
-            if env.now > 0:
-                decision = evaluation_criteria(genre, subgenre, Tactics, source)
-                value_new = min(100, max(0, value + (decision['value'] / 100)))
-                SAV = [SAV[0], decision['action'], value_new]
-
-            #############################################################
-            #                                                           #
-            #  Before leaving, the agent must update the outside world  #
-            #                                                           #
-            #############################################################
-
-            AGENTS[env.now].update({
-                name:
-                    {"genre": genre,
-                     "subgenre": subgenre,
-                     "name": name,
-                     "wallet": wallet,
-                     "profits": profits,
-                     "capacity": capacity,
-                     "EorM": EorM,
-                     "Tactics": Tactics[env.now],
-                     "SAV": SAV,
-                     "project_lifetime": project_lifetime,
-                     "portfolio_of_plants": portfolio_of_plants,
-                     "portfolio_of_projects": portfolio_of_projects,
-                     "periodicity": periodicity,
-                     "subgenre_price": subgenre_price,
-                     "capacity_to_add": capacity_to_add,
-                     "tolerance": tolerance}
-            })
             yield env.timeout(1)
 
 

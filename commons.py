@@ -898,7 +898,7 @@ def financing_FF(genre, target, name, my_wallet, my_receivables, value, financin
 
     my_wallet = new_wallet
     my_receivables = new_receivables
-    return {'wallet': my_wallet, 'receivables': my_receivables}
+    return {'wallet': my_wallet, 'receivables': my_receivables, 'financing_index': financing_index}
 
 
 def dd_dict_generating_FF(current,
