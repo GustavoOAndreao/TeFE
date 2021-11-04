@@ -923,3 +923,229 @@ def dd_dict_generating_FF(current,
     dd_dict_generated.update({'ranks': rank_dict})
 
     return dd_dict_generated
+
+
+### We now automate the creation of agents
+
+def Create(genre, traits):
+    # PUBLIC AGENTS
+    SIM_TIME, NPV_THRESHOLD_DBB, TP_NAME_LIST = config.SIM_TIME, config.NPV_THRESHOLD_DBB, config.TP_NAME_LIST
+
+    if env.now > 0:
+        traits = AGENTS.get(env.now).get(traits)
+
+    wallet = traits.get('wallet')  # everyone has a wallet
+
+    if genre in ('EPM', 'TPM', 'DBB'):
+        """ common things to all policy makers """
+        policy_maker_tactics = {
+            'innovation': {1: 0, 2: 0,
+                           4: 0, 5: 0,
+                           12: 0,
+                           45: 0,
+                           1245: 0},
+            'capacity': {1: 0, 2: 0,
+                         4: 0, 5: 0,
+                         12: 0,
+                         45: 0,
+                         1245: 0},
+            'expansion': {1: 0, 2: 0,
+                          4: 0, 5: 0,
+                          12: 0,
+                          45: 0,
+                          1245: 0}}
+
+        STARTING_META_STRATEGY = {0:
+                                      {0: traits.get('meta_strategy').get('first_to_change'),
+                                       'strikes': 0,
+                                       'max': traits.get('meta_strategy').get('max_strikes_for_the_first_option')}, 1:
+                                      {1: traits.get('meta_strategy').get('second_to_change'),
+                                       'strikes': 0,
+                                       'max': traits.get('meta_strategy').get('max_strikes_for_the_second_option')}, 2:
+                                      {2: traits.get('meta_strategy').get('third_to_change'),
+                                       'strikes': 0,
+                                       'max': traits.get('meta_strategy').get('max_strikes_for_the_third_option')}}
+        STARTING_RIVAT = [traits.get('RIVAT').get('Rationale'),
+                          traits.get('RIVAT').get('Instrument'),
+                          traits.get('RIVAT').get('Value'),
+                          traits.get('RIVAT').get('Action'),
+                          traits.get('RIVAT').get('Target')]
+        STARTING_POLICIES = []
+        STARTING_RANKS = {'R':
+                              {'innovation': traits.get('ranks').get('rationale').get('innovation'),
+                               'expansion': traits.get('ranks').get('rationale').get('expansion'),
+                               'capacity': traits.get('ranks').get('rationale').get('capacity')},
+                          'I': {}}
+        for instrument_in_quotes in traits.get('ranks').get('instrument'):
+            instrument = traits.get('ranks').get('instrument').get(instrument_in_quotes)
+            STARTING_RANKS.get('I').update({
+                instrument_in_quotes: instrument
+            })
+        STARTING_TACTICS = {}
+        for i in range(SIM_TIME):
+            STARTING_TACTICS.update({i: policy_maker_tactics})
+        if env.now > 0:
+            STARTING_TACTICS = traits.get('Tactics')
+
+        if genre == 'TPM':
+
+            #################################################################
+            #                                                               #
+            #                    technology policy maker                    #
+            #                                                               #
+            #################################################################
+            technology_policy_maker = TPM(env)
+
+        elif genre == 'EPM':
+
+            #################################################################
+            #                                                               #
+            #                      energy policy maker                      #
+            #                                                               #
+            #################################################################
+            STARTING_PPA_EXPIRATION = traits.get('PPA_expiration')  # for how many months do PPA contracts stand?
+            STARTING_PPA_LIMIT = traits.get('PPA_limit')  # how many months do companies have to build auction
+            STARTING_COUNTDOWN = traits.get(
+                'auction_countdown')  # how many months are spent between annoucing and deciding an auction?
+            energy_policy_maker = EPM(env)
+
+        else:
+
+            #################################################################
+            #                                                               #
+            #                       Development Bank                        #
+            #                                                               #
+            #################################################################
+            STARTING_NPV_THRESHOLD_DBB = traits.get('NPV_threshold_for_the_DBB')
+            NPV_THRESHOLD_DBB = STARTING_NPV_THRESHOLD_DBB  # it must be global for the finance function
+            STARTING_FINANCING_INDEX = {}
+            for Source in traits.get('financing_index'):
+                financing_index = traits.get('financing_index').get(Source)
+                STARTING_FINANCING_INDEX.update({Source: financing_index})
+            Development_Bank = DBB(env)
+    else:
+        """ so we are dealing with private agents """
+        if genre == 'BB':
+
+            #################################################################
+            #                                                               #
+            #                         Private Bank                          #
+            #                                                               #
+            #################################################################
+
+            STARTING_SUBGENRE = traits.get('subgenre')
+            STARTING_NAME = traits.get('name')
+            BB_NAME_LIST.append(STARTING_NAME)
+            STARTING_STRATEGY = traits.get('strategy')
+            STARTING_PORTFOLIO = traits.get('portfolio')
+            ACCEPTED_SOURCES = traits.get('accepted_sources')
+            STARTING_RATIONALE = traits.get('rationale')
+
+            STARTING_TACTICS = {}
+            STARTING_TACTICS_LIST = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+            for j in range(SIM_TIME):
+                for source in list(STARTING_TACTICS_LIST.keys()):
+                    STARTING_TACTICS.update({j: STARTING_TACTICS_LIST})
+
+            if env.now > 0:
+                STARTING_TACTICS = traits.get('Tactics')
+
+            STARTING_NAME = BB(env)
+
+        elif genre == 'EP':
+
+            #################################################################
+            #                                                               #
+            #                       Energy Producer                         #
+            #                                                               #
+            #################################################################
+
+            STARTING_STRATEGY = traits.get('strategy')
+            STARTING_eORm = 'E' if STARTING_STRATEGY[0] in [0, 1, 2] else 'M'
+            STARTING_SUBGENRE = STARTING_eORm
+            STARTING_NAME = traits.get('name')
+            EP_NAME_LIST.append(STARTING_NAME)
+            STARTING_PERIODICITY = traits.get('periodicity')
+            STARTING_TOLERANCE = traits.get('tolerance')
+            STARTING_PORTFOLIO = []
+            STARTING_TACTICS = {}
+            STARTING_TACTICS_LIST = {0: 0, 1: 0, 2: 0} if STARTING_STRATEGY[0] in [0, 1, 2] else {3: 0, 4: 0, 5: 0}
+            STARTING_MW_dict = {}
+            for t in range(SIM_TIME):
+                for source in list(STARTING_TACTICS_LIST.keys()):
+                    STARTING_TACTICS.update({t: STARTING_TACTICS_LIST})
+                STARTING_MW_dict.update({t: 0})
+
+            if env.now > 0:
+                STARTING_TACTICS = traits.get('Tactics')
+
+            Energy_Producer = EP(env)
+
+        else:
+
+            #################################################################
+            #                                                               #
+            #                     Technology Provider                       #
+            #                                                               #
+            #################################################################
+
+            name = traits.get('name')
+            TP_NAME_LIST.append(STARTING_NAME)
+
+            Tech_specs_dict = {1: {'subgenre': 1,
+                                   "transport": False,
+                                   "source_name": 'wind',
+                                   'EorM': 'E'
+                                   },
+                               2: {'subgenre': 2,
+                                   "transport": True,
+                                   "source_name": 'solar',
+                                   'EorM': 'E'
+                                   },
+                               4: {'subgenre': 4,
+                                   "transport": False,
+                                   "source_name": 'biogas',
+                                   'EorM': 'M'
+                                   },
+                               5: {'subgenre': 5,
+                                   "transport": False,
+                                   "source_name": 'hydrogen',
+                                   'EorM': 'M'
+                                   }}
+            traits.get('technology').update({
+                'last_radical_innovation': 0,
+                'last_marginal_innovation': 0,
+                'green': True})
+            traits.get('technology').update(
+                Tech_specs_dict.get(traits.get('technology').get('source'))
+            )
+
+            STARTING_TECHNOLOGY = traits.get('technology')
+            STARTING_TECHNOLOGY.update({'name': STARTING_NAME})
+
+            STARTING_SUBGENRE = traits.get('technology').get('subgenre')
+            NUMBER_OF_TP_DICT.update({
+                STARTING_SUBGENRE: NUMBER_OF_TP_DICT.get(STARTING_SUBGENRE) + 1
+            })
+            STARTING_CAPACITY = traits.get('wallet')
+            EorM = traits.get('technology').get('EorM')
+            STARTING_STRATEGY = traits.get('strategy')
+            if EorM == 'E':
+                tactical = (0, 1, 2)
+            else:
+                tactical = (3, 4, 5)
+
+            STARTING_TACTICS = {}
+            for t in range(SIM_TIME):
+                STARTING_TACTICS.update({
+                    t: {tactical[0]: 0, tactical[1]: 0, tactical[2]: 0}
+                })
+            STARTING_RnD_THRESHOLD = traits.get('RnD_threshold')
+            STARTING_CAPACITY_THRESHOLD = traits.get('capacity_threshold')
+
+            if env.now > 0:
+                STARTING_TACTICS = traits.get('Tactics')
+
+            STARTING_NAME = TP(env)
+
+    return print('genre :', genre, ', traits:', traits, '. \n')

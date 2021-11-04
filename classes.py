@@ -462,8 +462,7 @@ class TPM(object):
 
             policy_pool = []
             policy_pool.append(policy)
-            policy_pool.append(
-                policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
+            policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
 
             if env.now >= 2:
                 for entry in policy_pool:
@@ -472,33 +471,34 @@ class TPM(object):
                     budget = entry['budget'] if 'budget' in entry else value * wallet
                     value = disclosed_var if 'value' not in entry else entry['value']
 
-                if instrument == 'supply':
+                    if instrument == 'supply':
 
-                    firms = []
-                    for _ in AGENTS[env.now - 1]:
-                        i = AGENTS[env.now - 1][_]
-                        if i['genre'] == 'TP' and (i['source'] in INSTRUMENT_TO_SOURCE_DICT[source]):
-                            firms.append(_)
+                        firms = []
+                        for _ in AGENTS[env.now - 1]:
+                            i = AGENTS[env.now - 1][_]
+                            if i['genre'] == 'TP' and (i['source'] in INSTRUMENT_TO_SOURCE_DICT[source]):
+                                firms.append(_)
 
-                    if len(firms) > 0:
-                        """ we have to be certain that there are companies to be inbcentivised and now divides the possible incentive by the number of companies """
-                        # print('incentivised_firms', incentivised_firms)
-                        incentive = budget / len(firms)
+                        if len(firms) > 0:
+                            """ we have to be certain that there are companies to be inbcentivised and now divides the possible incentive by the number of companies """
+                            # print('incentivised_firms', incentivised_firms)
+                            incentive = budget / len(firms)
 
-                        """ and now we give out the incentives"""
-                        for TP in firms:
-                            code = uuid.uuid4().int
-                            CONTRACTS[env.now].update({
-                                code: {
-                                    'sender': name,
-                                    'receiver': TP,
-                                    'status': 'payment',
-                                    'value': incentive}})
-                else:
-                    """
-                    demmand-side incentives
-                    """
-                    print('TBD')
+                            """ and now we give out the incentives"""
+                            for TP in firms:
+                                code = uuid.uuid4().int
+                                CONTRACTS[env.now].update({
+                                    code: {
+                                        'sender': name,
+                                        'receiver': TP,
+                                        'status': 'payment',
+                                        'value': incentive}})
+                            wallet -= budget
+                    else:
+                        """
+                        demmand-side incentives
+                        """
+                        print('TBD')
 
                 """ and now back to the actual variables for the current policy"""
                 instrument = policy_pool[0]['instrument']
@@ -527,6 +527,8 @@ class TPM(object):
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
                 disclosed_var = thresholding_FF(responsiveness, disclosed_var, decision_var)
+
+                decisions = evaluating_FF(name)
 
             #################################################################
             #                                                               #
@@ -705,7 +707,7 @@ class EPM(object):
                         # alright, that was the one that changed
 
                         policies = policymaking_FF(striked[entry], policies,
-                                                   disclosed_var) if action == 'change' else policymaking_FF(dd, policies, disclosed_var, add=True)
+                                                   disclosed_var) if action == 'change' else policymaking_FF(striked[entry], policies, disclosed_var, add=True)
 
                 action = 'keep'  # we already changed, now back to business
 
@@ -823,7 +825,7 @@ class EPM(object):
                         """ we are actually using Feed-in premium, since we are adding a payment to the market price"""
                         for _ in MIX[env.now - 1]:
                             i = MIX[env.now - 1][_]
-                            if i['source'] in INSTRUMENT_TO_SOURCE_DICT(target) and i['auction_contracted'] != True:
+                            if i['source'] in INSTRUMENT_TO_SOURCE_DICT(source) and i['auction_contracted'] != True:
                                 i.update({
                                     'price': i['price'] * (1 + value)
                                 })
@@ -843,15 +845,15 @@ class EPM(object):
                             auction_time = True
                             for j in range(env.now, env.now + COUNTDOWN):
                                 """ as we starting the auction, we need to signal energy producers that their next projects of the target-source will be put inside the auction, for that we set up bids for each energy producer for each period from now until the deadline. This process creates bids for new agents also"""
-                                for source in INSTRUMENT_TO_SOURCE_DICT[target]:
-                                    AUCTION_WANTED_SOURCES.append(INSTRUMENT_TO_SOURCE_DICT[target])
+                                for source in INSTRUMENT_TO_SOURCE_DICT[source]:
+                                    AUCTION_WANTED_SOURCES.append(INSTRUMENT_TO_SOURCE_DICT[source])
                         elif auction_countdown == 0 and auction_time == True:
                             """ under these circumnstances, it is time to do the auction and contract projects for the ppas"""
                             auction_time = False
                             possible_projects = []
                             contracted_projects = []
-                            for source in INSTRUMENT_TO_SOURCE_DICT[target]:
-                                AUCTION_WANTED_SOURCES.remove(INSTRUMENT_TO_SOURCE_DICT[target])
+                            for source in INSTRUMENT_TO_SOURCE_DICT[source]:
+                                AUCTION_WANTED_SOURCES.remove(INSTRUMENT_TO_SOURCE_DICT[source])
                             """first we get the projects that were bidded"""
                             for i in range(env.now - COUNTDOWN, env.now - 1):
                                 for _ in CONTRACTS[i]:
@@ -889,8 +891,8 @@ class EPM(object):
 
                 """ and now back to the actual variables for the current policy"""
 
-                instrument = Policies[0]['instrument']
-                source = Policies[0]['source']
+                instrument = policies[0]['instrument']
+                source = policies[0]['source']
                 value = disclosed_var
 
             #################################################################
@@ -914,7 +916,7 @@ class EPM(object):
 
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
-                disclosed_var = thresholding_FF(responsivity, disclosed_var, decision_var)
+                disclosed_var = thresholding_FF(responsiveness, disclosed_var, decision_var)
                 decisions = evaluating_FF(name)
 
                 action = decisions['action']
@@ -1100,11 +1102,8 @@ class DBB(object):
                     else:
                         # alright, that was the one that changed
 
-                        Policies = policymaking_FF(dd, Policies,
-                                                   disclosed_var) if action == 'change' else policymaking_FF(dd,
-                                                                                                             Policies,
-                                                                                                             disclosed_var,
-                                                                                                             add=True)
+                        policies = policymaking_FF(striked[entry], policies,
+                                                   disclosed_var) if action == 'change' else policymaking_FF(striked[entry], policies, disclosed_var, add=True)
 
                 action = 'keep'  # we already changed, now back to business
 
@@ -1341,7 +1340,7 @@ class BB(object):
                dd_discount,
                dd_strategies):
 
-        CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC,config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, onfig.NPV_THRESHOLD, config.RISKS, config.env # globals
+        CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC,config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, config.NPV_THRESHOLD, config.RISKS, config.env # globals
 
         while True:
 
@@ -1482,7 +1481,7 @@ class BB(object):
 
 
 class EP(object):
-    def __init__(self, env, accepted_sources, name, wallet, EorM, subgenre, project_lifetime, portfolio_of_plants, portfolio_of_projects, periodicity, to_add, tolerance, last_acquisition_period):
+    def __init__(self, env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects, periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies):
         self.env = env
         self.genre = 'EP'
         self.accepted_sources = accepted_sources
@@ -1492,7 +1491,6 @@ class EP(object):
         self.EorM = EorM
         self.subgenre = EorM
         self.capacity = {0: 0, 1: 0, 2: 0} if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
-        self.project_lifetime = project_lifetime
         self.portfolio_of_plants = portfolio_of_plants
         self.portfolio_of_projects = portfolio_of_projects
         self.periodicity = periodicity
@@ -1511,50 +1509,55 @@ class EP(object):
         self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
 
         self.action = env.process(self.run_EP(self.genre,
-                                              self.subgenre,
+                                              self.accepted_sources,
                                               self.name,
                                               self.wallet,
                                               self.profits,
-                                              self.capacity,
                                               self.EorM,
-                                              self.Tactics,
-                                              self.SAV,
-                                              self.project_lifetime,
+                                              self.subgenre,
+                                              self.capacity,
                                               self.portfolio_of_plants,
                                               self.portfolio_of_projects,
                                               self.periodicity,
                                               self.subgenre_price,
-                                              self.capacity_to_add,
                                               self.tolerance,
                                               self.last_acquisition_period,
-                                              self.MW_dict))
+                                              self.dd_profits,
+                                              self.dd_source,
+                                              self.action,
+                                              self.dd_responsiveness,
+                                              self.dd_qual_vars,
+                                              self.dd_backwardness,
+                                              self.dd_avg_time,
+                                              self.dd_discount,
+                                              self.dd_strategies))
 
     def run_EP(self,
                genre,
-               subgenre,
+               accepted_sources,
                name,
                wallet,
                profits,
-               capacity,
                EorM,
-               Tactics,
-               SAV,
-               project_lifetime,
+               subgenre,
+               capacity,
                portfolio_of_plants,
                portfolio_of_projects,
                periodicity,
                subgenre_price,
-               capacity_to_add,
                tolerance,
                last_acquisition_period,
-               MW_dict):
+               dd_profits,
+               dd_source,
+               action,
+               dd_responsiveness,
+               dd_qual_vars,
+               dd_backwardness,
+               dd_avg_time,
+               dd_discount,
+               dd_strategies):
 
-        global CONTRACTS
-        global MIX
-        global AGENTS
-        global TECHNOLOGIC
-        global r
-        global DEMAND
+        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.env
 
         while True:
 
@@ -1719,7 +1722,7 @@ class EP(object):
                         the price is pre-fixed """
                         if i['EorM'] == 'M':
                             j.update({
-                                'price': (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) / i['MWh'] * (1 + SAV[2])
+                                'price': (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) / i['MWh'] * (1 + value)
                             })
                         # j.pop('receiver')
                         # j.pop('sender')
@@ -1800,59 +1803,7 @@ class EP(object):
                             )
                         })
 
-            #################################################################
-            #                                                               #
-            #    Now, the EP analyses what happened to the system due to    #
-            #                       its intervention                        #
-            #                                                               #
-            #################################################################
 
-            add_source = source_reporting_FF(name)
-
-            for entry in dd_source['ranks']:
-                dd_source['ranks'][entry] *= (1 - discount)
-                dd_source['ranks'][entry] += add_source[entry]
-
-            #################################################################
-            #                                                               #
-            #          And then, the EP will decide what to do next         #
-            #                                                               #
-            #################################################################
-
-            if env.now > 0:
-                decision_var = max(0, min(1, private_deciding_FF(name)))
-
-            #############################################################
-            #                                                           #
-            #  Before leaving, the agent must update the outside world  #
-            #                                                           #
-            #############################################################
-
-            AGENTS[env.now].update({
-                name:
-                    {"genre": genre,
-                     "subgenre": subgenre,
-                     "name": name,
-                     "wallet": wallet,
-                     "profits": profits,
-                     "capacity": capacity,
-                     "EorM": EorM,
-                     "Tactics": Tactics[env.now],
-                     "SAV": SAV,
-                     "project_lifetime": project_lifetime,
-                     "portfolio_of_plants": portfolio_of_plants,
-                     "portfolio_of_projects": portfolio_of_projects,
-                     "periodicity": periodicity,
-                     "subgenre_price": subgenre_price,
-                     "capacity_to_add": capacity_to_add,
-                     "tolerance": tolerance}
-            })
-
-            profits_dedicting_FF(name)
-            if env.now > 0:
-                post_evaluating_FF(decisions['strikes'], name)
-
-            yield env.timeout(1)
 
             #############################################################
             #                                                           #
@@ -1899,7 +1850,7 @@ class EP(object):
                     print(BB_)
                     number = number if number < len(BB_) else len(BB_) - 1
                     BB = sorted(BB_, key=lambda x: x[1], reverse=True)[number][0]
-                    # first we sort the list of agents. With the .values() we have both keys and values. The [number] selects the random pick of which source to get. The ['name') selects the name of the bank
+                    # first we sort the list of agents. With the .values() we have both keys and values. The [number] selects the random pick of which source to get. The ['name'] selects the name of the bank
                     receiver = BB
 
                 """ and now we send that project to the bank """
@@ -1917,8 +1868,10 @@ class EP(object):
                         'CAPEX': TP['CAPEX'],
                         'OPEX': TP['OPEX'],
                         'status': 'project',
-                        'capacity': Lumps * project['MW'],
-                        'MWh': Lumps * project['MW'] * 24 * 30 * project['CF']})
+                        'capacity': TP['Lumps'] * project['MW'],
+                        'MWh': TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
+                    'avoided_emissions' : TECHNOLOGIC[env.now - 1][TP['TP']]['avoided_emissions']*TP['Lumps'],
+                    'emissions' : TECHNOLOGIC[env.now - 1][TP['TP']]['emissions']*TP['Lumps']})
                     if TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
                         project.update(
                             {'status': 'bidded',
@@ -1933,16 +1886,14 @@ class EP(object):
                 i = portfolio_of_projects[_].copy()
                 number = np.random.poisson(1)
                 BB_list = []
-                for j in sorted(list(AGENTS[env.now - 1].values()),
-                                key=lambda x: x['financing_index'][i['source']], reverse=True):
+                for j in sorted(list(AGENTS[env.now - 1].values()), key=lambda x: x['financing_index'][i['source']], reverse=True):
                     BB_list.append(j['name'])
                 for bank in i['failed_attempts']:
                     BB_list.remove(bank)
                 if len(BB_list) > 0 and number < len(BB_list):
                     BB = BB_list[number]
-                else :
+                else:
                     BB = BB_list[-1] if len(BB_list) > 0 else random.choice(BB_NAME_LIST) #if there are items in the list, it chooses the last one, if not, it simply chooses randomly from the possible banks
-                elif
                 project = i.copy()
                 project.update({'sender': name,
                                 'receiver': BB,
@@ -1950,6 +1901,60 @@ class EP(object):
                 CONTRACTS[env.now].update({
                     project['code']: {project}
                 })
+
+            #################################################################
+            #                                                               #
+            #    Now, the EP analyses what happened to the system due to    #
+            #                       its intervention                        #
+            #                                                               #
+            #################################################################
+            add_source = source_reporting_FF(name)
+            for entry in dd_source['ranks']:
+                dd_source['ranks'][entry] *= (1 - discount)
+                dd_source['ranks'][entry] += add_source[entry]
+
+            #################################################################
+            #                                                               #
+            #          And then, the EP will decide what to do next         #
+            #                                                               #
+            #################################################################
+            if env.now > 0:
+                decision_var = max(0, min(1, private_deciding_FF(name)))
+
+            #############################################################
+            #                                                           #
+            #  Before leaving, the agent must update the outside world  #
+            #                                                           #
+            #############################################################
+            AGENTS[env.now].update({
+                name:
+                    {"genre" : genre,
+                     "accepted_sources" : accepted_sources,
+                     "name" : name,
+                     "wallet" : wallet,
+                     "profits" : profits,
+                     "EorM" : EorM,
+                     "subgenre" : subgenre,
+                     "capacity" : capacity,
+                     "portfolio_of_plants" : portfolio_of_plants,
+                     "portfolio_of_projects" : portfolio_of_projects,
+                     "periodicity" : periodicity,
+                     "subgenre_price" : subgenre_price,
+                     "tolerance" : tolerance,
+                     "last_acquisition_period" : last_acquisition_period,
+                     "dd_profits" : dd_profits,
+                     "dd_source" : dd_source,
+                     "action" : action,
+                     "dd_responsiveness" : dd_responsiveness,
+                     "dd_qual_vars" : dd_qual_vars,
+                     "dd_backwardness" : dd_backwardness,
+                     "dd_avg_time" : dd_avg_time,
+                     "dd_discount" : dd_discount,
+                     "dd_strategies" : dd_strategies,
+                     }})
+            profits_dedicting_FF(name)
+            if env.now > 0:
+                post_evaluating_FF(decisions['strikes'], name)
 
             yield env.timeout(1)
 
@@ -1972,7 +1977,7 @@ class Demand(object):
                initial_demand,
                specificities):
 
-        CONTRACTS, MIX, AGENTS, ECHNOLOGIC, r, DEMAND, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.env
+        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.env
 
         while True:
 
