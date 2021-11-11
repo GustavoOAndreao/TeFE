@@ -56,8 +56,6 @@ INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 4: [4], 5: [5], 45: [4,
 BASEL = 0.105
 MARGIN = .1
 INITIAL_DEMAND = {'E': 100, 'M': 80}
-KICKSTART_ADDITION = {'E': INITIAL_DEMAND.get('E') / 5,
-                      'M': INITIAL_DEMAND.get('M')}
 STARTING_PRICE = 25
 RADICAL_THRESHOLD = 2
 RISKS = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}

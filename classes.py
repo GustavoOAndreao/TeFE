@@ -22,7 +22,7 @@ import config
 
 
 class TP(object):
-    def __init__(self, env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, cap_conditions, strategy, dd_strategies):
+    def __init__(self, env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, cap_conditions, strategy, dd_strategies):
         self.env = env
         self.name = name  # name of the agent, is a string, normally something like TP_01
         self.genre = 'TP'  # genre, we do not use type, because type is a dedicated command of python, is also a string
@@ -42,7 +42,7 @@ class TP(object):
         self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
         self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
         self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add'
-        self.dd_responsiveness = dd_responsiveness  # this is the responsiveness, follows the current ranked dictionary
+        self.dd_kappas = dd_kappas  # this is the kappa, follows the current ranked dictionary
         self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
         self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
         self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
@@ -70,7 +70,7 @@ class TP(object):
             self.dd_source,
             self.decision_var,
             self.action,
-            self.dd_responsiveness,
+            self.dd_kappas,
             self.dd_qual_vars,
             self.dd_backwardness,
             self.dd_avg_time,
@@ -97,7 +97,7 @@ class TP(object):
                dd_source,
                decision_var,
                action,
-               dd_responsiveness,
+               dd_kappas,
                dd_qual_vars,
                dd_backwardness,
                dd_avg_time,
@@ -117,10 +117,10 @@ class TP(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount,dd_strategies]
+            list_of_strikeables = [dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount,dd_strategies]
 
             source = dd_source['current']
-            responsiveness = dd_responsiveness['current']
+            kappa = dd_kappas['current']
             qual_vars = dd_qual_vars['current']
             backwardness = dd_backwardness['current']
             avg_time = dd_avg_time['current']
@@ -154,7 +154,7 @@ class TP(object):
             #################################################################
 
             if env.now > 0 and (action == 'add' or 'change'):
-                striked = striking_FF(list_of_strikeables)
+                striked = striking_FF(list_of_strikeables, kappa)
 
                 for entry in range(0, len(list_of_strikeables)):
                     list_of_strikeables[entry] = striked[entry]
@@ -259,7 +259,8 @@ class TP(object):
 
             """ 8) we must also check if the capping process is on"""
 
-            if len(MIX[env.now - 1]):
+            now = 0
+            if len(MIX[env.now - 1])>0:
                 # if there is no capping, we must first make sure that it has not started
                 now = finding_FF(MIX[env.now - 1], 'MW', 'sum', {'EP': name})['value']
                 if now > cap_conditions['cap']:
@@ -268,7 +269,7 @@ class TP(object):
                 else:
                     capped = False
 
-            if capped == True:
+            if now > 0:
                 # capping process is on, so we have to make sure that the capacity increased
                 previous = finding_FF(MIX[env.now - 2], 'MW', 'sum', {'EP': name})['value']
 
@@ -320,7 +321,7 @@ class TP(object):
                 "dd_source": dd_source,
                 "decision_var": decision_var,
                 "action": action,
-                "dd_responsiveness": dd_responsiveness,
+                "dd_kappas": dd_kappas,
                 "dd_qual_vars": dd_qual_vars,
                 "dd_backwardness": dd_backwardness,
                 "dd_avg_time": dd_avg_time,
@@ -337,7 +338,7 @@ class TP(object):
 
 
 class TPM(object):
-    def __init__(self, env, wallet, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, dd_SorT):
+    def __init__(self, env, wallet, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, dd_SorT):
         self.env = env
         self.genre = 'TPM'
         self.subgenre = 'TPM'
@@ -348,7 +349,7 @@ class TPM(object):
         self.decision_var = decision_var
         self.disclosed_var = decision_var
         self.action = 'keep'
-        self.dd_responsiveness = dd_responsiveness
+        self.dd_kappas = dd_kappas
         self.dd_qual_vars = dd_qual_vars
         self.dd_backwardness = dd_backwardness
         self.dd_avg_time = dd_avg_time
@@ -362,8 +363,7 @@ class TPM(object):
         self.dd_rationale = dd_rationale
         self.dd_SorT = dd_SorT
 
-        self.action = env.process(self.run_TPM(self.env,
-                                               self.genre,
+        self.action = env.process(self.run_TPM(self.genre,
                                                self.subgenre,
                                                self.name,
                                                self.wallet,
@@ -372,7 +372,7 @@ class TPM(object):
                                                self.decision_var,
                                                self.disclosed_var,
                                                self.action,
-                                               self.dd_responsiveness,
+                                               self.dd_kappas,
                                                self.dd_qual_vars,
                                                self.dd_backwardness,
                                                self.dd_avg_time,
@@ -388,7 +388,6 @@ class TPM(object):
                                                self.dd_SorT))
 
     def run_TPM(self,
-                env,
                 genre,
                 subgenre,
                 name,
@@ -398,7 +397,7 @@ class TPM(object):
                 decision_var,
                 disclosed_var,
                 action,
-                dd_responsiveness,
+                dd_kappas,
                 dd_qual_vars,
                 dd_backwardness,
                 dd_avg_time,
@@ -424,11 +423,11 @@ class TPM(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
+            list_of_strikeables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
             policy = dd_policy['current']
             source = dd_source['current']
-            responsiveness = dd_responsiveness['current']
+            kappa = dd_kappas['current']
             backwardness = dd_backwardness['current']
             avg_time = dd_avg_time['current']
             discount = dd_discount['current']
@@ -439,7 +438,7 @@ class TPM(object):
             value = disclosed_var
 
             if env.now > 0 and (action == 'add' or 'change'):
-                striked = striking_FF(list_of_strikeables)  # with this we have a different list of strikeables
+                striked = striking_FF(list_of_strikeables, kappa)  # with this we have a different list of strikeables
 
                 for entry in range(0, len(list_of_strikeables)):
 
@@ -526,7 +525,7 @@ class TPM(object):
 
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
-                disclosed_var = thresholding_FF(responsiveness, disclosed_var, decision_var)
+                disclosed_var = thresholding_FF(kappa, disclosed_var, decision_var)
 
                 decisions = evaluating_FF(name)
 
@@ -547,7 +546,7 @@ class TPM(object):
                     "decision_var": decision_var,
                     "disclosed_var": disclosed_var,
                     "action": action,
-                    "dd_responsiveness": dd_responsiveness,
+                    "dd_kappas": dd_kappas,
                     "dd_qual_vars": dd_qual_vars,
                     "dd_backwardness": dd_backwardness,
                     "dd_avg_time": dd_avg_time,
@@ -561,7 +560,7 @@ class TPM(object):
                     "dd_rationale": dd_rationale,
                     "policy": policy,
                     "source": source,
-                    "responsiveness": responsiveness,
+                    "kappa": kappa,
                     "backwardness": backwardness,
                     "avg_time": avg_time,
                     "discount": discount,
@@ -578,7 +577,7 @@ class TPM(object):
 
 
 class EPM(object):
-    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, dd_policy, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, auction_capacity, dd_SorT):
+    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, auction_capacity, dd_SorT):
         self.env = env
         self.genre = 'EPM'
         self.subgenre = 'EPM'
@@ -594,7 +593,7 @@ class EPM(object):
         self.decision_var = decision_var
         self.disclosed_var = decision_var
         self.action = 'keep'
-        self.dd_responsiveness = dd_responsiveness
+        self.dd_kappas = dd_kappas
         self.dd_qual_vars = dd_qual_vars
         self.dd_backwardness = dd_backwardness
         self.dd_avg_time = dd_avg_time
@@ -624,7 +623,7 @@ class EPM(object):
                                                self.decision_var,
                                                self.disclosed_var,
                                                self.action,
-                                               self.dd_responsiveness,
+                                               self.dd_kappas,
                                                self.dd_qual_vars,
                                                self.dd_backwardness,
                                                self.dd_avg_time,
@@ -654,7 +653,7 @@ class EPM(object):
                 decision_var,
                 disclosed_var,
                 action,
-                dd_responsiveness,
+                dd_kappas,
                 dd_qual_vars,
                 dd_backwardness,
                 dd_avg_time,
@@ -680,11 +679,11 @@ class EPM(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
+            list_of_strikeables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
             policy = dd_policy['current']
             source = dd_source['current']
-            responsiveness = dd_responsiveness['current']
+            kappa = dd_kappas['current']
             backwardness = dd_backwardness['current']
             avg_time = dd_avg_time['current']
             discount = dd_discount['current']
@@ -695,7 +694,7 @@ class EPM(object):
             value = disclosed_var
 
             if env.now > 0 and (action == 'add' or 'change'):
-                striked = striking_FF(list_of_strikeables)  # with this we have a different list of strikeables
+                striked = striking_FF(list_of_strikeables, kappa)  # with this we have a different list of strikeables
 
                 for entry in range(0, len(list_of_strikeables)):
 
@@ -916,7 +915,7 @@ class EPM(object):
 
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
-                disclosed_var = thresholding_FF(responsiveness, disclosed_var, decision_var)
+                disclosed_var = thresholding_FF(kappa, disclosed_var, decision_var)
                 decisions = evaluating_FF(name)
 
                 action = decisions['action']
@@ -942,12 +941,11 @@ class EPM(object):
                 "decision_var": decision_var,
                 "disclosed_var": disclosed_var,
                 "action": action,
-                "dd_responsiveness": dd_responsiveness,
+                "dd_kappas": dd_kappas,
                 "dd_qual_vars": dd_qual_vars,
                 "dd_backwardness": dd_backwardness,
                 "dd_avg_time": dd_avg_time,
                 "dd_discount": dd_discount,
-                "dd_policy": dd_policy,
                 "policies": policies,
                 "dd_index": dd_index,
                 "index_per_source": index_per_source,
@@ -966,7 +964,7 @@ class EPM(object):
 
 
 class DBB(object):
-    def __init__(self, env, wallet, dd_policy, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, Portfolio, accepted_sources, dd_SorT):
+    def __init__(self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, Portfolio, accepted_sources, dd_SorT):
         self.env = env
         self.NPV_THRESHOLD_DBB = config.NPV_THRESHOLD_DBB
         self.guaranteed_contracts = []
@@ -979,7 +977,7 @@ class DBB(object):
         self.decision_var = decision_var
         self.disclosed_var = decision_var
         self.action = 'keep'
-        self.dd_responsiveness = dd_responsiveness
+        self.dd_kappas = dd_kappas
         self.dd_qual_vars = dd_qual_vars
         self.dd_backwardness = dd_backwardness
         self.dd_avg_time = dd_avg_time
@@ -1010,7 +1008,7 @@ class DBB(object):
                                                self.decision_var,
                                                self.disclosed_var,
                                                self.action,
-                                               self.dd_responsiveness,
+                                               self.dd_kappas,
                                                self.dd_qual_vars,
                                                self.dd_backwardness,
                                                self.dd_avg_time,
@@ -1041,7 +1039,7 @@ class DBB(object):
                 decision_var,
                 disclosed_var,
                 action,
-                dd_responsiveness,
+                dd_kappas,
                 dd_qual_vars,
                 dd_backwardness,
                 dd_avg_time,
@@ -1071,12 +1069,12 @@ class DBB(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_policy, dd_source, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time,
+            list_of_strikeables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time,
                                    dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
             policy = dd_policy['current']
             source = dd_source['current']
-            responsiveness = dd_responsiveness['current']
+            kappa = dd_kappas['current']
             backwardness = dd_backwardness['current']
             avg_time = dd_avg_time['current']
             discount = dd_discount['current']
@@ -1087,7 +1085,7 @@ class DBB(object):
             value = disclosed_var
 
             if env.now > 0 and (action == 'add' or 'change'):
-                striked = striking_FF(list_of_strikeables)  # with this we have a different list of strikeables
+                striked = striking_FF(list_of_strikeables, kappa)  # with this we have a different list of strikeables
 
                 for entry in range(0, len(list_of_strikeables)):
 
@@ -1119,7 +1117,7 @@ class DBB(object):
             for source in [0, 1, 2, 3, 4, 5]:
                 try:
                     RISKS.update(
-                        {source: finding_FF(AGENTS[env.now], what, 'median', {'genre': 'BB'})['value']})
+                        {source: finding_FF(MIX[env.now], 'risk', 'median', {'source': source})['value']})
                     # we attempt to get the median risk for each source
                 except:
                     # if not possible (there are no banks financing that source or no banks at all) which translates to risky source
@@ -1178,14 +1176,14 @@ class DBB(object):
                     value = disclosed_var if 'value' not in entry else entry['value']
 
                     if instrument == 'finance' and len(CONTRACTS[env.now - 1]) > 0:
-                        financing = financing_FF(genre, target, name, wallet, receivable, value, financing_index)
+                        financing = financing_FF(genre, source, name, wallet, receivable, value, financing_index)
 
                         wallet = financing['wallet']
                         receivable = financing['receivables']
 
                     else:
                         """ We are dealing with guarentees """
-                        financing = financing_FF(genre, target, name, wallet, receivable, value, financing_index, True)
+                        financing = financing_FF(genre, source, name, wallet, receivable, value, financing_index, True)
 
                         wallet = financing['wallet']
                         receivable = financing['receivables']
@@ -1217,7 +1215,7 @@ class DBB(object):
 
             if env.now > 0:
                 decision_var = max(0, min(1, public_deciding_FF(name)))
-                disclosed_var = thresholding_FF(responsivity, disclosed_var, decision_var)
+                disclosed_var = thresholding_FF(kappa, disclosed_var, decision_var)
 
             #################################################################
             #                                                               #
@@ -1238,12 +1236,11 @@ class DBB(object):
                     "decision_var": decision_var,
                     "disclosed_var": disclosed_var,
                     "action": action,
-                    "dd_responsiveness": dd_responsiveness,
+                    "dd_kappas": dd_kappas,
                     "dd_qual_vars": dd_qual_vars,
                     "dd_backwardness": dd_backwardness,
                     "dd_avg_time": dd_avg_time,
                     "dd_discount": dd_discount,
-                    "dd_policy": dd_policy,
                     "policies": policies,
                     "dd_index": dd_index,
                     "index_per_source": index_per_source,
@@ -1258,7 +1255,7 @@ class DBB(object):
                     "car_ratio": car_ratio,
                     "policy": policy,
                     "source": source,
-                    "responsiveness": responsiveness,
+                    "kappa": kappa,
                     "backwardness": backwardness,
                     "avg_time": avg_time,
                     "discount": discount,
@@ -1273,7 +1270,7 @@ class DBB(object):
 
 
 class BB(object):
-    def __init__(self, env, Portfolio, accepted_sources, name, wallet, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies):
+    def __init__(self, env, Portfolio, accepted_sources, name, wallet, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index):
         self.env = env
         self.financing_index = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
         self.Portfolio = Portfolio
@@ -1289,12 +1286,13 @@ class BB(object):
         self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
         self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
         self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add' 
-        self.dd_responsiveness = dd_responsiveness  # this is the responsiveness, follows the current ranked dictionary
+        self.dd_kappas = dd_kappas  # this is the kappa, follows the current ranked dictionary
         self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
         self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
         self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
         self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
         self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
+        self.dd_index = dd_index
 
         self.action = env.process(self.run_BB(self.financing_index,
                                               self.Portfolio,
@@ -1310,12 +1308,13 @@ class BB(object):
                                               self.dd_source,
                                               self.decision_var,
                                               self.action,
-                                              self.dd_responsiveness,
+                                              self.dd_kappas,
                                               self.dd_qual_vars,
                                               self.dd_backwardness,
                                               self.dd_avg_time,
                                               self.dd_discount,
-                                              self.dd_strategies
+                                              self.dd_strategies,
+                                              self.dd_index
                                               ))
 
     def run_BB(self,
@@ -1333,12 +1332,13 @@ class BB(object):
                dd_source,
                decision_var,
                action,
-               dd_responsiveness,
+               dd_kappas,
                dd_qual_vars,
                dd_backwardness,
                dd_avg_time,
                dd_discount,
-               dd_strategies):
+               dd_strategies,
+               dd_index):
 
         CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC,config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, config.NPV_THRESHOLD, config.RISKS, config.env # globals
 
@@ -1351,10 +1351,10 @@ class BB(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies]
+            list_of_strikeables = [dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies]
 
             source = dd_source['current']
-            responsiveness = dd_responsiveness['current']
+            kappa = dd_kappas['current']
             qual_vars = dd_qual_vars['current']
             backwardness = dd_backwardness['current']
             avg_time = dd_avg_time['current']
@@ -1391,7 +1391,7 @@ class BB(object):
             #################################################################
 
             if env.now > 0 and (action == 'add' or 'change'):
-                striked = striking_FF(list_of_strikeables)
+                striked = striking_FF(list_of_strikeables, kappa)
 
                 for entry in range(0, len(list_of_strikeables)):
                     list_of_strikeables[entry] = striked[entry]
@@ -1434,6 +1434,7 @@ class BB(object):
 
             if env.now > 0:
                 decision_var = max(0, min(1, private_deciding_FF(name)))
+                decisions = evaluating_FF(name)
 
             #################################################################
             #                                                               #
@@ -1456,14 +1457,14 @@ class BB(object):
                 "dd_source": dd_source,
                 "decision_var": decision_var,
                 "action": action,
-                "dd_responsiveness": dd_responsiveness,
+                "dd_kappas": dd_kappas,
                 "dd_qual_vars": dd_qual_vars,
                 "dd_backwardness": dd_backwardness,
                 "dd_avg_time": dd_avg_time,
                 "dd_discount": dd_discount,
                 "dd_strategies": dd_strategies,
                 "source": source,
-                "responsiveness": responsiveness,
+                "kappa": kappa,
                 "qual_vars": qual_vars,
                 "backwardness": backwardness,
                 "avg_time": avg_time,
@@ -1481,7 +1482,7 @@ class BB(object):
 
 
 class EP(object):
-    def __init__(self, env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects, periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies):
+    def __init__(self, env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects, periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index):
         self.env = env
         self.genre = 'EP'
         self.accepted_sources = accepted_sources
@@ -1501,12 +1502,13 @@ class EP(object):
         self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
         self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
         self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add'
-        self.dd_responsiveness = dd_responsiveness  # this is the responsiveness, follows the current ranked dictionary
+        self.dd_kappas = dd_kappas  # this is the kappa, follows the current ranked dictionary
         self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
         self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
         self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
         self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
         self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
+        self.dd_index = dd_index
 
         self.action = env.process(self.run_EP(self.genre,
                                               self.accepted_sources,
@@ -1525,12 +1527,13 @@ class EP(object):
                                               self.dd_profits,
                                               self.dd_source,
                                               self.action,
-                                              self.dd_responsiveness,
+                                              self.dd_kappas,
                                               self.dd_qual_vars,
                                               self.dd_backwardness,
                                               self.dd_avg_time,
                                               self.dd_discount,
-                                              self.dd_strategies))
+                                              self.dd_strategies,
+                                              self.dd_index))
 
     def run_EP(self,
                genre,
@@ -1550,14 +1553,15 @@ class EP(object):
                dd_profits,
                dd_source,
                action,
-               dd_responsiveness,
+               dd_kappas,
                dd_qual_vars,
                dd_backwardness,
                dd_avg_time,
                dd_discount,
-               dd_strategies):
+               dd_strategies,
+               dd_index):
 
-        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.env
+        CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.env
 
         while True:
 
@@ -1568,10 +1572,10 @@ class EP(object):
             #                                                               #
             #################################################################
 
-            list_of_strikeables = [dd_profits, dd_source, decision_var, dd_responsiveness, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies]
+            list_of_strikeables = [dd_profits, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies]
 
             source = dd_source['current']
-            responsiveness = dd_responsiveness['current']
+            kappa = dd_kappas['current']
             qual_vars = dd_qual_vars['current']
             backwardness = dd_backwardness['current']
             avg_time = dd_avg_time['current']
@@ -1589,7 +1593,7 @@ class EP(object):
             #################################################################
 
             if env.now > 0 and (action == 'add' or 'change'):
-                striked = striking_FF(list_of_strikeables)
+                striked = striking_FF(list_of_strikeables, kappa)
 
                 for entry in range(0, len(list_of_strikeables)):
                     if entry == 'source':
@@ -1730,7 +1734,6 @@ class EP(object):
                         portfolio_of_plants.update({_: j})
                         # print('portfolio_of_plants.update({_ : j})', _, j)
                         capacity.update({i['source']: capacity[i['source']] + i['capacity']})
-                        MW_dict.update({env.now: MW_dict[env.now] + i['capacity']})
 
                         """ if the financed project was in the pool of projects of the EP, we have to take it out """
                         if _ in portfolio_of_projects:
@@ -1776,10 +1779,9 @@ class EP(object):
                         })
                         """ moreover, if it is a molecule project, the price is pre-fixed """
                         if i['EorM'] == 'M':
-                            k.update({'price': (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) * SAV[2]})
+                            k.update({'price': (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) * decision_var})
                         portfolio_of_plants.update({code: k})
                         capacity.update({k['source']: capacity[k['source']] + k['capacity']})
-                        MW_dict.update({env.now: MW_dict[env.now] + k['capacity']})
 
                         code = uuid.uuid4().int
                         CONTRACTS[env.now].update({
@@ -1853,33 +1855,32 @@ class EP(object):
                     # first we sort the list of agents. With the .values() we have both keys and values. The [number] selects the random pick of which source to get. The ['name'] selects the name of the bank
                     receiver = BB
 
-                """ and now we send that project to the bank """
-                if capacity_to_add > 0:
-                    # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the whole project
-                    project = TECHNOLOGIC[env.now - 1][TP['TP']].copy()
-                    # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
-                    project.update({
-                        'sender': name,
-                        'receiver': receiver,
-                        'TP': TP['TP'],
-                        'Lumps': TP['Lumps'],
-                        'old_CAPEX': TECHNOLOGIC[env.now - 1][TP['TP']]['CAPEX'],
-                        'old_OPEX': TECHNOLOGIC[env.now - 1][TP['TP']]['OPEX'],
-                        'CAPEX': TP['CAPEX'],
-                        'OPEX': TP['OPEX'],
-                        'status': 'project',
-                        'capacity': TP['Lumps'] * project['MW'],
-                        'MWh': TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
-                    'avoided_emissions' : TECHNOLOGIC[env.now - 1][TP['TP']]['avoided_emissions']*TP['Lumps'],
-                    'emissions' : TECHNOLOGIC[env.now - 1][TP['TP']]['emissions']*TP['Lumps']})
-                    if TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
-                        project.update(
-                            {'status': 'bidded',
-                             'receiver': 'EPM'})
-                    else:
-                        project.update({'status': 'project'})
-                    code = uuid.uuid4().int
-                    CONTRACTS[env.now].update({code: project})
+
+                # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the whole project
+                project = TECHNOLOGIC[env.now - 1][TP['TP']].copy()
+                # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
+                project.update({
+                    'sender': name,
+                    'receiver': receiver,
+                    'TP': TP['TP'],
+                    'Lumps': TP['Lumps'],
+                    'old_CAPEX': TECHNOLOGIC[env.now - 1][TP['TP']]['CAPEX'],
+                    'old_OPEX': TECHNOLOGIC[env.now - 1][TP['TP']]['OPEX'],
+                    'CAPEX': TP['CAPEX'],
+                    'OPEX': TP['OPEX'],
+                    'status': 'project',
+                    'capacity': TP['Lumps'] * project['MW'],
+                    'MWh': TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
+                'avoided_emissions' : TECHNOLOGIC[env.now - 1][TP['TP']]['avoided_emissions']*TP['Lumps'],
+                'emissions' : TECHNOLOGIC[env.now - 1][TP['TP']]['emissions']*TP['Lumps']})
+                if TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
+                    project.update(
+                        {'status': 'bidded',
+                         'receiver': 'EPM'})
+                else:
+                    project.update({'status': 'project'})
+                code = uuid.uuid4().int
+                CONTRACTS[env.now].update({code: project})
 
             for _ in portfolio_of_projects:
                 """ now we have to resend the "projects in the portfolio_of_projects dictionary """
@@ -1920,6 +1921,7 @@ class EP(object):
             #################################################################
             if env.now > 0:
                 decision_var = max(0, min(1, private_deciding_FF(name)))
+                decisions = evaluating_FF(name)
 
             #############################################################
             #                                                           #
@@ -1945,7 +1947,7 @@ class EP(object):
                      "dd_profits" : dd_profits,
                      "dd_source" : dd_source,
                      "action" : action,
-                     "dd_responsiveness" : dd_responsiveness,
+                     "dd_kappas" : dd_kappas,
                      "dd_qual_vars" : dd_qual_vars,
                      "dd_backwardness" : dd_backwardness,
                      "dd_avg_time" : dd_avg_time,
@@ -2010,7 +2012,7 @@ class Demand(object):
                         for _ in MIX[month]:
                             i = MIX[month][_]
                             if i['status'] == 'contracted':
-                                if i['green'] == True:
+                                if i['green'] is True:
                                     greeness.update({i['EorM']: greeness[i['EorM']] + i['MWh']})
                                 total += i['MWh']
 

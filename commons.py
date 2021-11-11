@@ -46,7 +46,7 @@ this is the striking function, it returns a dictionary the updated list of entri
 """
 
 
-def striking_FF(list_o_entries, responsivity):
+def striking_FF(list_o_entries, kappa):
     for entry in list_o_entries:
         if ('strikes' in list(entry.keys()) and entry.get('strikes') < 0) or ('0_th_var' in list(entry.keys())):
             # we are dealing with one of the qualitative variables and it is the one that got striked or we are dealing with the zeroth
@@ -60,7 +60,7 @@ def striking_FF(list_o_entries, responsivity):
             # lastly we reset the strikes
 
             entry.update({
-                'strikes': 10 * responsivity
+                'strikes': 10 * kappa
             })
 
     return list_o_entries
@@ -126,6 +126,8 @@ def finding_FF(complete_dictionary, what,
     if len(whats) == 0:
         # nothing was got, so we must put whats as zero and assign nothing
         whats = [0]
+        whos = ['No one']
+        completes = ['Nothing']
 
     if how == 'highest':
         idx = whats.index(max(whats))
@@ -503,7 +505,7 @@ def evaluating_FF(name):
     # first we have to get the information of the agent from the specififed dictionary
 
     avg_time = AGENTS_r[name][env.now - 1]['dd_avg_time']['current']
-    responsiveness = AGENTS_r[name][env.now - 1]['dd_responsiveness']['current']
+    kappa = AGENTS_r[name][env.now - 1]['dd_kappas']['current']
     discount = AGENTS_r[name][env.now - 1]['dd_discount']['current']
     more_the_better = AGENTS_r[name][env.now - 1]['more_the_better']
     genre = AGENTS_r[name][env.now - 1]['genre']
@@ -543,8 +545,8 @@ def evaluating_FF(name):
         ratio = min(present / hist, hist / present)  # to ensure that we get the percentage below 100
         dist = random.uniform(0, 1)
 
-        if ((present > (1 + responsiveness) * hist) and more_the_better == True) or (
-                (present < (1 - responsiveness) * hist) and more_the_better == False):
+        if ((present > (1 + kappa) * hist) and more_the_better == True) or (
+                (present < (1 - kappa) * hist) and more_the_better == False):
             # current is better than hist, so now we run the distribution
             strikes = [3, 1] if dist > ratio else [1, 0]
             if more_the_better == True:
@@ -553,8 +555,8 @@ def evaluating_FF(name):
                 action = 'change' if change[genre] == True else 'keep'
 
 
-        elif ((present > (1 + responsiveness) * hist) and more_the_better == False) or (
-                (present < (1 - responsiveness) * hist) and more_the_better == True):
+        elif ((present > (1 + kappa) * hist) and more_the_better == False) or (
+                (present < (1 - kappa) * hist) and more_the_better == True):
             # current is better than hist, so now we run the distribution
             strikes = [-3, -1] if dist > ratio else [-1, 0]
             if more_the_better == True:
@@ -589,7 +591,7 @@ def private_deciding_FF(name):
     agent = AGENTS[env.now - 1][name].copy()
     avg_time = agent['dd_avg_time']['current']
     discount = agent['dd_discount']['current']
-    responsivity = agent['dd_responsivity']['current']
+    kappa = agent['dd_kappas']['current']
     previous_var = agent['decision_var']
 
     if env.now - 1 - avg_time < 0:
@@ -611,7 +613,7 @@ def private_deciding_FF(name):
 
     ratio = (np.mean(medians) - AGENTS[end][name]["profits"]) / (max(profits - min(profits)))
 
-    new_value = responsivity * ratio + (1 - responsivity) * previous_var
+    new_value = kappa * ratio + (1 - kappa) * previous_var
 
     return new_value
 
@@ -631,7 +633,7 @@ def public_deciding_FF(name):
     discount = now['dd_discount']['current']
     target = now['dd_target']['current']
     eta_acc = now['dd_eta']['current']
-    responsivity = now['dd_responsivities']['current']
+    kappa = now['dd_kappa']['current']
     previous_var = now['decision_var']
     SorT = now['dd_SorT']['current']
 
@@ -663,9 +665,9 @@ def public_deciding_FF(name):
                 increase = (current - before)
                 results.append(increase)
 
-        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** responsivity if SorT == 'T' else (np.mean(results) - results[-1]) / (max(results) - min(results))
+        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** kappa if SorT == 'T' else (np.mean(results) - results[-1]) / (max(results) - min(results))
 
-    new_value = responsivity * ratio + (1 - responsivity) * previous_var
+    new_value = kappa * ratio + (1 - kappa) * previous_var
 
     return new_value
 
@@ -888,6 +890,7 @@ def financing_FF(genre, target, name, my_wallet, my_receivables, value, financin
                     'receiver': j.get('sender'),
                     'status': 'financed',
                     'ammortisation': env.now + 1 + AMMORT,
+                    'risk': value,
                     'principal': j.get('CAPEX') * ((interest_r) ** j.get('building_time'))})
             CONTRACTS.get(env.now).update({i: new_contract})
             # print(name, 'financed', new_contract)
@@ -904,7 +907,7 @@ def financing_FF(genre, target, name, my_wallet, my_receivables, value, financin
 def dd_dict_generating_FF(current,
                           source=True, zero_to_start=True):
     """
-    This function produces the dicts for the turtles of the system. zero_to_start is defaulted to True, if anything else then it must the whole dictionary, for example: {0 : 3, 0.5: 1, 1:0} for a responsivity example
+    This function produces the dicts for the turtles of the system. zero_to_start is defaulted to True, if anything else then it must the whole dictionary, for example: {0 : 3, 0.5: 1, 1:0} for a kappa example
     """
     dd_dict_generated = {"current": current}
 
@@ -929,10 +932,10 @@ def dd_dict_generating_FF(current,
 
 def Create(genre, traits):
     # PUBLIC AGENTS
-    SIM_TIME, NPV_THRESHOLD_DBB, TP_NAME_LIST = config.SIM_TIME, config.NPV_THRESHOLD_DBB, config.TP_NAME_LIST
+    SIM_TIME, NPV_THRESHOLD_DBB, TP_NAME_LIST, env = config.SIM_TIME, config.NPV_THRESHOLD_DBB, config.TP_NAME_LIST, config.env
 
     if env.now > 0:
-        traits = AGENTS.get(env.now).get(traits)
+        traits = AGENTS.get(env.now)
 
     wallet = traits.get('wallet')  # everyone has a wallet
 
