@@ -958,6 +958,7 @@ def Create(genre, traits):
                           45: 0,
                           1245: 0}}
 
+
         STARTING_META_STRATEGY = {0:
                                       {0: traits.get('meta_strategy').get('first_to_change'),
                                        'strikes': 0,
