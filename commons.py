@@ -240,8 +240,7 @@ def weighting_FF(time, var, weight, dictionary,
 
 def private_reporting_FF(genre,
                          EorM='No'):
-
-    r, TECHNOLOGIC, AGENTS, DEMAND, env, AMMORT = config.r, config.TECHNOLOGIC, config.AGENTS, config.DEMAND, config.env,config.AMMORT
+    r, TECHNOLOGIC, AGENTS, DEMAND, env, AMMORT = config.r, config.TECHNOLOGIC, config.AGENTS, config.DEMAND, config.env, config.AMMORT
 
     backward_dict, forward_dict = {}, {}
 
@@ -264,10 +263,13 @@ def private_reporting_FF(genre,
         technology = TECHNOLOGIC.get(env.now - 1).get(TP)
         demand_now = DEMAND.get(technology.get('EorM'))
         max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'source': source})['value']
-        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM})['value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to the get the highest price for the eletrcitity or molecule part.
+        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM})[
+            'value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to the get the highest price for the eletrcitity or molecule part.
         lumps = np.floor(demand_now / technology['MW'])
 
-        NPV = npv_generating_FF(r, technology.get('lifetime'), lumps, technology.get('MW'), technology.get('building_time'), technology.get('CAPEX') * lumps, technology.get('OPEX') * lumps, max_price, technology.get('CF'), AMMORT)
+        NPV = npv_generating_FF(r, technology.get('lifetime'), lumps, technology.get('MW'),
+                                technology.get('building_time'), technology.get('CAPEX') * lumps,
+                                technology.get('OPEX') * lumps, max_price, technology.get('CF'), AMMORT)
 
         if technology['source'] in Sources and NPV > forward_dict[technology['source']]:
             forward_dict.update({technology['source']: NPV})
@@ -287,7 +289,9 @@ def private_reporting_FF(genre,
     for source in Sources:
         specific_profits = 'profits' + str(source)  # we have to get the profits for that source of the
         current = finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum',
-                             {'genre': genre})['value'] if EorM == 'No' else finding_FF(AGENTS.get(env.now - 1),specific_profits, 'sum',{'genre': genre, 'EorM': EorM})['value']  # we now have the current profits for that source in that agent
+                             {'genre': genre})['value'] if EorM == 'No' else \
+        finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum', {'genre': genre, 'EorM': EorM})[
+            'value']  # we now have the current profits for that source in that agent
         current += Sources[source]  # we now add to the current profits what we had
         backward_dict.update({source: current})  # and update the backward_dict dictionary
 
@@ -298,7 +302,6 @@ def private_reporting_FF(genre,
 
 
 def public_reporting_FF(rationale):
-
     r, TECHNOLOGIC, MIX, AGENTS, CONTRACTS, DEMAND, env = config.r, config.TECHNOLOGIC, config.MIX, config.AGENTS, config.CONTRACTS, config.DEMAND, config.env
 
     backward_dict = {}
@@ -347,7 +350,8 @@ def public_reporting_FF(rationale):
                     'capacity')  # if the rationale is innovation we are looking into R&D, if not then the rationale is internalization and we are looking at the productive capacity
                 # we now sum the two, because it would mean what would happen if all profits were reinvested into R&D
                 """ and now to the backward_dict"""
-                agent = AGENTS.get(env.now - 1).get(_)  # we have to get the last information, we are looking at what actually happened
+                agent = AGENTS.get(env.now - 1).get(
+                    _)  # we have to get the last information, we are looking at what actually happened
                 current = agent['RandD'] if rationale == 'innovation' else agent.get('capacity')
                 current += Sources[agent.get('source')]  # we now add to the current profits what we had
                 backward_dict.update({agent.get('source'): current})  # and update the backward_dict dictionary
@@ -478,12 +482,13 @@ def from_time_to_agents_FF(dictionary):
 
     return
 
-
-""" this function evaluates what happen to a certain agent at the previous period. Returns {'action' : action, 'strikes' : strikes}"""
-
-
 def evaluating_FF(name):
+    """
+    This function evaluates what happen to a certain agent at the previous period
 
+    :param name:
+    :return: dictionary as following {'action' : action, 'strikes' : strikes}
+    """
     env, AGENTS_r = config.env, config.AGENTS_r
 
     add = {'EP': False,
@@ -608,8 +613,10 @@ def private_deciding_FF(name):
 
     for period in range(start, end):
         for i in ('highest', 'lowest'):
-            profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * ((1 - discount) ** (end - 1 - period)))
-            medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * ((1 - discount) ** (end - 1 - period)))
+            profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * (
+                        (1 - discount) ** (end - 1 - period)))
+            medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * (
+                        (1 - discount) ** (end - 1 - period)))
 
     ratio = (np.mean(medians) - AGENTS[end][name]["profits"]) / (max(profits - min(profits)))
 
@@ -642,7 +649,8 @@ def public_deciding_FF(name):
     ratio = previous_var
 
     if (2 * avg_time > env.now - 1 and t_1['dd_rationale']['current'] == t_2['dd_rationale']['current'] == rationale and
-            t_1['dd_target']['current'] == t_2['dd_target']['current'] == target and t_1['dd_SorT']['current'] == t_2['dd_SorT']['current']):
+            t_1['dd_target']['current'] == t_2['dd_target']['current'] == target and t_1['dd_SorT']['current'] ==
+            t_2['dd_SorT']['current']):
         # three conditions must be filled: we must have two avg_time cycles in order to compare then (normally 2 years), and that cycle must have the same rationale and the same target, otherwise the policy maker changed rationale or the target was chaned. If they are not filled, ratio remains as zero which tells the policy maker to keep doing whatever
         if rationale == 'green':
             # the policy maker wants less emissions
@@ -665,7 +673,13 @@ def public_deciding_FF(name):
                 increase = (current - before)
                 results.append(increase)
 
-        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** kappa if SorT == 'T' else (np.mean(results) - results[-1]) / (max(results) - min(results))
+        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** kappa if SorT == 'T' else (
+                                                                                                                                np.mean(
+                                                                                                                                    results) -
+                                                                                                                                results[
+                                                                                                                                    -1]) / (
+                                                                                                                                max(results) - min(
+                                                                                                                            results))
 
     new_value = kappa * ratio + (1 - kappa) * previous_var
 
@@ -813,7 +827,6 @@ def capital_adequacy_rationing_FF(receivables_dict, risk_dict, wallet):
 
 
 def source_accepting_FF(accepted_sources, old):
-
     accepted_sources.update({
         old: True
     })
@@ -823,7 +836,6 @@ def source_accepting_FF(accepted_sources, old):
 
 def financing_FF(genre, target, name, my_wallet, my_receivables, value, financing_index,
                  guaranteeing=False):
-
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, BASEL, AMMORT, NPV_THRESHOLD, NPV_THRESHOLD_DBB, INSTRUMENT_TO_SOURCE_DICT, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.NPV_THRESHOLD, config.NPV_THRESHOLD_DBB, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.env
 
     new_wallet = my_wallet.copy()
@@ -957,7 +969,6 @@ def Create(genre, traits):
                           12: 0,
                           45: 0,
                           1245: 0}}
-
 
         STARTING_META_STRATEGY = {0:
                                       {0: traits.get('meta_strategy').get('first_to_change'),
@@ -1094,7 +1105,7 @@ def Create(genre, traits):
             #################################################################
 
             name = traits.get('name')
-            TP_NAME_LIST.append(STARTING_NAME)
+            TP_NAME_LIST.append(name)
 
             Tech_specs_dict = {1: {'subgenre': 1,
                                    "transport": False,
@@ -1124,16 +1135,9 @@ def Create(genre, traits):
                 Tech_specs_dict.get(traits.get('technology').get('source'))
             )
 
-            STARTING_TECHNOLOGY = traits.get('technology')
-            STARTING_TECHNOLOGY.update({'name': STARTING_NAME})
-
-            STARTING_SUBGENRE = traits.get('technology').get('subgenre')
-            NUMBER_OF_TP_DICT.update({
-                STARTING_SUBGENRE: NUMBER_OF_TP_DICT.get(STARTING_SUBGENRE) + 1
-            })
-            STARTING_CAPACITY = traits.get('wallet')
-            EorM = traits.get('technology').get('EorM')
-            STARTING_STRATEGY = traits.get('strategy')
+            Technology = traits.get('technology')
+            Technology.update({'name': STARTING_NAME})
+            capacity = traits.get('wallet')
             if EorM == 'E':
                 tactical = (0, 1, 2)
             else:
@@ -1150,6 +1154,8 @@ def Create(genre, traits):
             if env.now > 0:
                 STARTING_TACTICS = traits.get('Tactics')
 
-            STARTING_NAME = TP(env)
+            STARTING_NAME = TP(env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold, dd_source,
+                 decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, cap_conditions,
+                 strategy, dd_strategies)
 
     return print('genre :', genre, ', traits:', traits, '. \n')
