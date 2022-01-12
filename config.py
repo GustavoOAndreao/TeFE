@@ -115,3 +115,5 @@ for j in range(SIM_TIME):
                                        'last_marginal_innovation': 0,
                                        'emissions': 5000,
                                        'avoided_emissions': 0}}})
+
+

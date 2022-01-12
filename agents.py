@@ -1,0 +1,82 @@
+#################################################################
+#                                                               #
+#                  This is the list of agents:                  #
+#                    First, the public agents                   #
+#                                                               #
+#################################################################
+
+_agents = {'DBB' : {"wallet" : wallet,
+                    "dd_policy" : dd_policy,
+                    "dd_source" : dd_source,
+                    "decision_var" : decision_var,
+                    "dd_kappas" : dd_kappas,
+                    "dd_qual_vars" : dd_qual_vars,
+                    "dd_backwardness" : dd_backwardness,
+                    "dd_avg_time" : dd_avg_time,
+                    "dd_discount" : dd_discount,
+                    "policies" : policies,
+                    "dd_index" : dd_index,
+                    "dd_eta" : dd_eta,
+                    "dd_ambition" : dd_ambition,
+                    "dd_target" : dd_target,
+                    "dd_rationale" : dd_rationale,
+                    "Portfolio" : Portfolio,
+                    "accepted_sources" : accepted_sources,
+                    "dd_SorT" : dd_SorT
+                    },
+           'EPM' : {"wallet": wallet,
+                    "dd_source": dd_source,
+                    "decision_var": decision_var,
+                    "dd_kappas": dd_kappas,
+                    "dd_qual_vars": dd_qual_vars,
+                    "dd_backwardness": dd_backwardness,
+                    "dd_avg_time": dd_avg_time,
+                    "dd_discount": dd_discount,
+                    "dd_policy": dd_policy,
+                    "dd_index": policies,
+                    "policies": dd_index,
+                    "dd_eta": dd_eta,
+                    "dd_ambition": dd_ambition,
+                    "dd_target": dd_target,
+                    "dd_rationale": dd_rationale,
+                    "dd_SorT": dd_SorT
+                    },
+           'TPM' : {"wallet": wallet,
+                    "dd_source": dd_source,
+                    "decision_var": decision_var,
+                    "dd_kappas": dd_kappas,
+                    "dd_qual_vars": dd_qual_vars,
+                    "dd_backwardness": dd_backwardness,
+                    "dd_avg_time": dd_avg_time,
+                    "dd_discount": dd_discount,
+                    "dd_policy": dd_policy,
+                    "policies": policies,
+                    "dd_index": dd_index,
+                    "dd_eta": dd_eta,
+                    "dd_ambition": dd_ambition,
+                    "dd_target": dd_target,
+                    "dd_rationale": dd_rationale,
+                    "dd_SorT": dd_SorT
+                    },
+           'TPs' : {'wind0': {},
+                    'wind1': {},
+                    'solar0': {},
+                    'solar1': {},
+                    'biomass0': {},
+                    'biomass1': {},
+                    'hydrogen0': {},
+                    'hydrogen1':{}
+                    },
+           'EPs' : {'E0': {},
+                    'E1': {},
+                    'E2': {},
+                    'M0': {},
+                    'M1': {},
+                    'M2': {}
+                    },
+           'BBs': {'0': {},
+                   '1': {},
+                   '2': {},
+                   '3': {}
+                   }
+           }
