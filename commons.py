@@ -4,22 +4,24 @@ import numpy as np
 from statistics import median
 import config
 
-""" example function, blem is a value inside the config file"""
-
 
 def bla():
+    """ example function, blem is a value inside the config file"""
     blem = config.blem  # gets the list
     print(blem)  # prints the list
     blem[0] += 1  # updates the list
     return
 
 
-"""
-This function changes a dictionary entry of a certain time to a certain value. It is useful to change dictionaries, reload agents from dictionaries and continue the simulation
-"""
-
-
 def scheduling_FF(dictionary, time, changes):
+    """    This function changes a dictionary entry of a certain time to a certain value. It is useful to change
+     dictionaries, reload agents from dictionaries and continue the simulation
+
+    :param dictionary:
+    :param time:
+    :param changes:
+    :return:
+    """
     to_change = dictionary
     old_entry = [to_change[time][changes[0]]]
 
@@ -41,18 +43,19 @@ def scheduling_FF(dictionary, time, changes):
     return print('changed', old_entry[1], 'in', old_entry[0], 'to', changes[-1])
 
 
-"""
-this is the striking function, it returns a dictionary the updated list of entries
-"""
-
-
 def striking_FF(list_o_entries, kappa):
+    """ this is the striking function, it returns a dictionary the updated list of entries
+
+    :param list_o_entries:
+    :param kappa:
+    :return:
+    """
     for entry in list_o_entries:
         if ('strikes' in list(entry.keys()) and entry.get('strikes') < 0) or ('0_th_var' in list(entry.keys())):
             # we are dealing with one of the qualitative variables and it is the one that got striked or we are dealing with the zeroth
 
-            change = min(np.random.poisson(1)), len(
-                entry.get('ranks') - 1)  # with this we ensure that the chosen thing is within range of the dictionary
+            change = min(np.random.poisson(1)), len(entry.get('ranks') - 1)  # with this we ensure that the chosen
+            # thing is within range of the dictionary
 
             new = sorted(list(entry.get('ranks').items()), reverse=True)[change][0]
             entry.update({'current': new})
@@ -66,12 +69,12 @@ def striking_FF(list_o_entries, kappa):
     return list_o_entries
 
 
-"""
-This function returns a dictionary contaning the new_eta 
-"""
-
-
 def new_targeting_FF(name):
+    """ This function returns a dictionary containing the new_eta
+
+    :param name:
+    :return:
+    """
     AGENTS_r, env = config.AGENTS_r, config.env
 
     target = AGENTS_r[name][env.now - 1]["dd_target"]['current']
@@ -85,11 +88,16 @@ def new_targeting_FF(name):
     return {'new_eta': env.now + eta_acc, 'new_target': new_target}
 
 
-""" this function returns the highest, lowest or the median value ('what') for any dictionary entry (MIX, TECHNOLOGIC, AGENTS, CONTRACTS) in the form of condiction dict = {'condition' : 'state of the condition'}"""
-
-
 def finding_FF(complete_dictionary, what,
                how='highest', cond_dict=None):
+    """ this function returns the highest, lowest or the median value ('what') for any dictionary entry (MIX, TECHNOLOGIC, AGENTS, CONTRACTS) in the form of condiction dict = {'condition' : 'state of the condition'}
+
+    :param complete_dictionary:
+    :param what:
+    :param how:
+    :param cond_dict:
+    :return:
+    """
     if cond_dict is None:
         cond_dict = {}
     whats, whos, completes = [], [], []
@@ -148,12 +156,25 @@ def finding_FF(complete_dictionary, what,
             'complete_dict_entry': completes[idx]}
 
 
-""" 20/8/21 this used to be price_generator, now it is the weighting_FF because it basically finds a weighted average, maximums or minimums of something in relation to other thing in one certain dictionary. Still may have some problems for multiple periods"""
-""" We have to get the average price per source or per type (if we are dealing with demand). For that we have to get the price of each plant , multiply it by its MWh, and lastly divide it by the total MWh of that source (or type)"""
-
-
 def weighting_FF(time, var, weight, dictionary,
                  Type='average', EorM=False, demand=False, public=False, discount=0):
+    """ 20/8/21 this used to be price_generator, now it is the weighting_FF because it basically finds a weighted
+    average, maximums or minimums of something in relation to other thing in one certain dictionary. Still may have
+    some problems for multiple periods. We have to get the average price per source or per type (if we are dealing
+    with demand). For that we have to get the price of each plant , multiply it by its MWh, and lastly divide it by
+    the total MWh of that source (or type).
+
+    :param time:
+    :param var:
+    :param weight:
+    :param dictionary:
+    :param Type:
+    :param EorM:
+    :param demand:
+    :param public:
+    :param discount:
+    :return:
+    """
     STARTING_PRICE = config.STARTING_PRICE
     """ if we are dealing with an EP or TP, then we have to get only the prices for the sources of the same EorM as they """
     if EorM == False:
@@ -235,11 +256,14 @@ def weighting_FF(time, var, weight, dictionary,
     return var_dict
 
 
-"""Internal function called by source_reporting_FF. this is the reporting_FF, it reports both the backwards and forwards for private agents. Technology producers don't report because they can't switch the source, but banks and energy providers yes. Backwards basically reports what happened """
-
-
 def private_reporting_FF(genre,
                          EorM='No'):
+    """ Internal function called by source_reporting_FF. this is the reporting_FF, it reports both the backwards and forwards for private agents. Technology producers don't report because they can't switch the source, but banks and energy providers yes. Backwards basically reports what happened
+
+    :param genre:
+    :param EorM:
+    :return:
+    """
     r, TECHNOLOGIC, AGENTS, DEMAND, env, AMMORT = config.r, config.TECHNOLOGIC, config.AGENTS, config.DEMAND, config.env, config.AMMORT
 
     backward_dict, forward_dict = {}, {}
@@ -290,18 +314,20 @@ def private_reporting_FF(genre,
         specific_profits = 'profits' + str(source)  # we have to get the profits for that source of the
         current = finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum',
                              {'genre': genre})['value'] if EorM == 'No' else \
-        finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum', {'genre': genre, 'EorM': EorM})[
-            'value']  # we now have the current profits for that source in that agent
+            finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum', {'genre': genre, 'EorM': EorM})[
+                'value']  # we now have the current profits for that source in that agent
         current += Sources[source]  # we now add to the current profits what we had
         backward_dict.update({source: current})  # and update the backward_dict dictionary
 
     return {"backward_dict": backward_dict, "forward_dict": forward_dict}
 
 
-""" Internal function called by source_reporting_FF. This is the reporting_FF, it reports both the backwards and forwards for public agents. """
-
-
 def public_reporting_FF(rationale):
+    """
+    Internal function called by source_reporting_FF. This is the reporting_FF, it reports both the backwards and forwards for public agents.
+    :param rationale:
+    :return:
+    """
     r, TECHNOLOGIC, MIX, AGENTS, CONTRACTS, DEMAND, env = config.r, config.TECHNOLOGIC, config.MIX, config.AGENTS, config.CONTRACTS, config.DEMAND, config.env
 
     backward_dict = {}
@@ -359,10 +385,16 @@ def public_reporting_FF(rationale):
     return {"backward_dict": backward_dict, "forward_dict": forward_dict}
 
 
-""" Internal function called by source_reporting_FF. Transforms the results of the reporting function into the new_dd_source"""
-
-
 def sourcing_FF(backward_dict, forward_dict, index_dict, backwardness):
+    """ Internal function called by source_reporting_FF. Transforms the results of the reporting function into the
+     new_dd_source
+
+    :param backward_dict:
+    :param forward_dict:
+    :param index_dict:
+    :param backwardness:
+    :return:
+    """
     bwd, idx = backwardness, index_dict
     back, forw = backward_dict, forward_dict
     new_dd_source = {}
@@ -375,10 +407,12 @@ def sourcing_FF(backward_dict, forward_dict, index_dict, backwardness):
     return new_dd_source
 
 
-""" This function produces the dd_source dict with the scores for sources according to the agent's characteristics."""
-
-
 def source_reporting_FF(name):
+    """ This function produces the dd_source dict with the scores for sources according to the agent's characteristics.
+
+    :param name:
+    :return:
+    """
     AGENTS_r = config.AGENTS_r
     agent = AGENTS_r[0][name]
     genre = agent['genre']
@@ -435,8 +469,6 @@ def indexing_FF(name):
                 # that plant was not auction contracted, so we just have to get how much the EPM paid for
                 index[Plant['source']] += (Plant.get('MWh') * Plant.get('price')) * FiTs[Plant['source']]
 
-
-
     elif agent['genre'] in ['BB', 'DBB']:
 
         for source in index:
@@ -445,12 +477,14 @@ def indexing_FF(name):
     return index
 
 
-"""
-This function checks if the treshold for changing the disclosed value was reached. If it was not, the disclosed value remains the same, if it was, then the disclosed value is changed to the current decision value. It returns 
-"""
-
-
 def thresholding_FF(threshold, disclosed_var, decision_var):
+    """ This function checks if the treshold for changing the disclosed value was reached. If it was not, the disclosed value remains the same, if it was, then the disclosed value is changed to the current decision value. It returns
+
+    :param threshold:
+    :param disclosed_var:
+    :param decision_var:
+    :return:
+    """
     threshold_upper, threshold_lower = disclosed_var * (1 + threshold), disclosed_var * (1 - threshold)
 
     if not threshold_lower < decision_var < threshold_upper:
@@ -459,12 +493,13 @@ def thresholding_FF(threshold, disclosed_var, decision_var):
     return disclosed_var
 
 
-"""
-This function gets the dictionaries that are created by time and arrange copys as other dictionaries reversed, i.e., time by agents
-"""
-
-
 def from_time_to_agents_FF(dictionary):
+    """ This function gets the dictionaries that are created by time and arrange copys as other dictionaries reversed,
+     i.e., time by agents
+
+    :param dictionary:
+    :return:
+    """
     AGENTS, TECHNOLOGIC, AGENTS_r, TECHNOLOGIC_r, env = config.AGENTS, config.TECHNOLOGIC, config.AGENTS_r, config.TECHNOLOGIC_r, config.env
 
     for _ in dictionary.get(env.now):
@@ -481,6 +516,7 @@ def from_time_to_agents_FF(dictionary):
         dictionary_r.update({_: {env.now: i}})
 
     return
+
 
 def evaluating_FF(name):
     """
@@ -614,9 +650,9 @@ def private_deciding_FF(name):
     for period in range(start, end):
         for i in ('highest', 'lowest'):
             profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * (
-                        (1 - discount) ** (end - 1 - period)))
+                    (1 - discount) ** (end - 1 - period)))
             medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * (
-                        (1 - discount) ** (end - 1 - period)))
+                    (1 - discount) ** (end - 1 - period)))
 
     ratio = (np.mean(medians) - AGENTS[end][name]["profits"]) / (max(profits - min(profits)))
 
@@ -625,12 +661,13 @@ def private_deciding_FF(name):
     return new_value
 
 
-"""
-This function tells the ratio of 'effort' for the public agents as well as the current state of the analyzed variable
-"""
-
-
 def public_deciding_FF(name):
+    """ This function tells the ratio of 'effort' for the public agents as well as the current state of the analyzed
+     variable
+
+    :param name:
+    :return:
+    """
     AGENTS, AGENTS_r, MIX, env = config.AGENTS, config.AGENTS_r, config.MIX, config.env
 
     now = AGENTS_r[name][env.now - 1]
@@ -673,23 +710,23 @@ def public_deciding_FF(name):
                 increase = (current - before)
                 results.append(increase)
 
-        ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** kappa if SorT == 'T' else (
-                                                                                                                                np.mean(
-                                                                                                                                    results) -
-                                                                                                                                results[
-                                                                                                                                    -1]) / (
-                                                                                                                                max(results) - min(
-                                                                                                                            results))
+        if SorT == 'T':
+            ratio = (1 - (eta_acc - env.now) / (max(eta_acc, np.mean(results)) - env.now)) ** kappa
+        else:
+            ratio = (np.mean(results) - results[-1]) / (max(results) - min(results))
 
     new_value = kappa * ratio + (1 - kappa) * previous_var
 
     return new_value
 
 
-""" this function returns the current state of the observed variable according to the rationale. For policy makers only """
-
-
 def current_stating_FF(rationale):
+    """ This function returns the current state of the observed variable according to the rationale. For policy makers
+     only
+
+    :param rationale:
+    :return:
+    """
     MIX, AGENTS, env = config.MIX, config.AGENTS, config.env
     if rationale == 'green':
         # the policy maker wants less emissions
@@ -708,11 +745,25 @@ def current_stating_FF(rationale):
     return current_state
 
 
-""" this function produces the NPV for a certain investment. risks set to 0 mean that there exists no risk"""
-
-
 def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, capacity_factor, ammort_t,
                       cash_flow_RISK=0, financing_RISK=0, true_capex_and_opex=False):
+    """ this function produces the NPV for a certain investment. risks set to 0 mean that there exists no risk
+
+    :param interest:
+    :param time:
+    :param lumps:
+    :param MW:
+    :param building_t:
+    :param capex:
+    :param opex:
+    :param p:
+    :param capacity_factor:
+    :param ammort_t:
+    :param cash_flow_RISK:
+    :param financing_RISK:
+    :param true_capex_and_opex:
+    :return:
+    """
     ### Credits to Alexandre Mejdalani from the gavetário ###
 
     CashFlow = []
@@ -746,11 +797,18 @@ def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, cap
     return sum(NPV)
 
 
-""" This function adds a current policy to the pool of perenious policies as well as change the current policy. dd is the dictionary that changed, Policies is the list of current policies Now policies is the only output, which is the list of policies dictionary"""
-
-
 def policymaking_FF(dd, Policies, value,
                     add=False):
+    """ This function adds a current policy to the pool of perenious policies as well as change the current policy.
+     dd is the dictionary that changed, Policies is the list of current policies Now policies is the only output, which
+      is the list of policies dictionary
+
+    :param dd:
+    :param Policies:
+    :param value:
+    :param add:
+    :return:
+    """
     POLICY_EXPIRATION_DATE, AGENTS, env = config.POLICY_EXPIRATION_DATE, config.AGENTS, config.env
 
     """ first we retire policies that reached their time"""
@@ -798,10 +856,12 @@ def policymaking_FF(dd, Policies, value,
     return Policies
 
 
-"this function gets the profits_dd and turns them into specific dictionary entries. Needed for the evaluation"
-
-
 def profits_dedicting_FF(name):
+    """ this function gets the profits_dd and turns them into specific dictionary entries. Needed for the evaluation
+
+    :param name:
+    :return:
+    """
     AGENTS, env = config.AGENTS, config.env
 
     agent = AGENTS[env.now][name]
@@ -813,18 +873,19 @@ def profits_dedicting_FF(name):
     return
 
 
-"""
-This function produces the capital adequacy ratio according to the receivables, risk and the reserves (wallet) of a certain bank. car_ratio is a number
-"""
-
-
 def capital_adequacy_rationing_FF(receivables_dict, risk_dict, wallet):
+    """ This function produces the capital adequacy ratio according to the receivables, risk and the reserves (wallet) of a certain bank. car_ratio is a number
+
+    :param receivables_dict:
+    :param risk_dict:
+    :param wallet:
+    :return:
+    """
     BASEL = config.BASEL
     recv_w_risk = {source: receivables_dict[source] * risk_dict[source] for source in receivables_dict}
     denominator = sum(recv_w_risk[source] for source in recv_w_risk)
     car_ratio = wallet / denominator if denominator > 0 else BASEL
     return car_ratio
-
 
 def source_accepting_FF(accepted_sources, old):
     accepted_sources.update({
