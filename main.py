@@ -4,20 +4,12 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 
-
-#################################################################
-#                                                               #
-#        Now we import the functions from the commons.py        #
-#                                                               #
-#################################################################
-
-from config import *
-from commons import *
-from classes import *
-
-
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+
+    from config import *
+    from commons import *
+    from classes import *
 
     env.run(until=SIM_TIME)
 

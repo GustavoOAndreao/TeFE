@@ -1,7 +1,6 @@
 import random
 import feather
 import simpy
-# !pip install simpy #on colab it must be this pip install thing, dunno why
 import numpy as np
 import pandas as pd
 import math as math
@@ -2095,7 +2094,7 @@ class Demand(object):
         self.action = env.process(run_DD(self.genre,
                                          self.name,
                                          self.initial_demand,
-                                         self.specificities)),
+                                         self.specificities))
 
 
 def Create(genre, traits):

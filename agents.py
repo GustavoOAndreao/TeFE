@@ -13,7 +13,7 @@ _agents = {'DBB' : {"wallet" : 20*10**5,
                     "decision_var" : 0.5,
                     "dd_kappas" : {'current' : 0.5,
                                    'ranks' : {0.2: 2, 0.8: 1, 0.5 : 0}},
-                    "dd_qual_vars" : dd_qual_vars,
+                    "dd_qual_vars" : {0 : 'dd_source', 1: 'dd_kappas', 2: 'dd_policy'},
                     "dd_backwardness" : {'current' : 0.5,
                                    'ranks' : {0.2: 2, 0.8: 1, 0.5 : 0}},
                     "dd_avg_time" : {'current' : 12,
@@ -23,13 +23,18 @@ _agents = {'DBB' : {"wallet" : 20*10**5,
                     "policies" : policies,
                     "dd_index" : {'current' : 0.5,
                                    'ranks' : {0.2: 2, 0.8: 1, 0.5 : 0}},
-                    "dd_eta" : dd_eta,
-                    "dd_ambition" : dd_ambition,
-                    "dd_target" : dd_target,
-                    "dd_rationale" : dd_rationale,
-                    "Portfolio" : Portfolio,
-                    "accepted_sources" : accepted_sources,
-                    "dd_SorT" : dd_SorT
+                    "dd_eta" : {'current' : 120,
+                                   'ranks' : {240: 3, 60: 2, 120: 0}},
+                    "dd_ambition" : {'current' : 1.5,
+                                   'ranks' : {2: 2, 1.25: 1, 1.5:0}},
+                    "dd_target" : {'current' : 0.5,
+                                   'ranks' : {0.2: 2, 0.8: 1, 0.5 : 0}},
+                    "dd_rationale" : {'current' : 'capacity',
+                                   'ranks' : {'green': 2, 'innovation': 1, 'capacity' : 0}},
+                    "Portfolio" : {},
+                    "accepted_sources" : {0: False, 1: True, 2: False, 3: False, 4: False, 5: False},
+                    "dd_SorT" : {'current' : 0.5,
+                                   'ranks' : {0.2: 2, 0.8: 1, 0.5 : 0}}
                     },
            'EPM' : {"wallet": wallet,
                     "dd_source": dd_source,
@@ -92,8 +97,3 @@ _agents = {'DBB' : {"wallet" : 20*10**5,
                    '3': {}
                    }
            }
-
-
-"SENDER" : "technology policy maker"
-"receiver":
-"value":

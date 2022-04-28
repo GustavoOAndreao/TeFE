@@ -688,7 +688,7 @@ def public_deciding_FF(name):
     if (2 * avg_time > env.now - 1 and t_1['dd_rationale']['current'] == t_2['dd_rationale']['current'] == rationale and
             t_1['dd_target']['current'] == t_2['dd_target']['current'] == target and t_1['dd_SorT']['current'] ==
             t_2['dd_SorT']['current']):
-        # three conditions must be filled: we must have two avg_time cycles in order to compare then (normally 2 years), and that cycle must have the same rationale and the same target, otherwise the policy maker changed rationale or the target was chaned. If they are not filled, ratio remains as zero which tells the policy maker to keep doing whatever
+        # three conditions must be filled: we must have two avg_time cycles in order to compare then (normally 2 years), and that cycle must have the same rationale and the same target, otherwise the policy maker changed rationale or the target was changed. If they are not filled, ratio remains as zero which tells the policy maker to keep doing whatever
         if rationale == 'green':
             # the policy maker wants less emissions
             dictionary = MIX
@@ -704,7 +704,7 @@ def public_deciding_FF(name):
             before = finding_FF(dictionary.get(period - avg_time), rationale, 'sum', restriction)['value']
             if SorT == 'T':
                 increase = (current - before) / before
-                eta_exp = target / ((1 + increase) * current)
+                eta_exp = (1+target) * current / ((1 + increase) * current)
                 results.append(eta_exp)
             else:
                 increase = (current - before)
@@ -895,7 +895,7 @@ def source_accepting_FF(accepted_sources, old):
     return accepted_sources
 
 
-def financing_FF(genre, target, name, my_wallet, my_receivables, value, financing_index,
+def financing_FF(genre, source, name, my_wallet, my_receivables, value, financing_index,
                  guaranteeing=False):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, BASEL, AMMORT, NPV_THRESHOLD, NPV_THRESHOLD_DBB, INSTRUMENT_TO_SOURCE_DICT, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.NPV_THRESHOLD, config.NPV_THRESHOLD_DBB, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.env
 
@@ -903,7 +903,7 @@ def financing_FF(genre, target, name, my_wallet, my_receivables, value, financin
     new_receivables = my_receivables.copy()
 
     tresHOLD = NPV_THRESHOLD if genre == 'BB' else NPV_THRESHOLD_DBB
-    accepted_sources = target if genre == 'BB' else INSTRUMENT_TO_SOURCE_DICT.get(target)
+    accepted_sources = source if genre == 'BB' else INSTRUMENT_TO_SOURCE_DICT.get(source)
     """ first the bank collects all the projects adressed to it """
 
     adressed_projects = {}
@@ -999,3 +999,18 @@ def dd_dict_generating_FF(current,
     dd_dict_generated.update({'ranks': rank_dict})
 
     return dd_dict_generated
+
+def starting_public_agents():
+
+    """
+
+    :return: policies
+    """
+
+    dd_policy =
+    dd_sources =
+
+
+    return policies
+
+
