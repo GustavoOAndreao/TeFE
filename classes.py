@@ -1256,93 +1256,98 @@ def run_DBB(NPV_THRESHOLD_DBB,
 
 
 class DBB(object):
-    def __init__(self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
-                 dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, Portfolio,
-                 accepted_sources, dd_SorT):
+    def __init__(self, env, wallet, policy, source, decision_var, LSS_tresh, past_weight,
+                 memory, discount, policies, impatience, disclosed_thresh, rationale, Portfolio,
+                 accepted_sources):
+
+        # Pre-Q:
+        # self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
+        #                  dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale,
+        #                  Portfolio,
+        #                  accepted_sources, dd_SorT
+
         self.env = env
         self.NPV_THRESHOLD_DBB = config.NPV_THRESHOLD_DBB
         self.guaranteed_contracts = []
         self.genre = 'DBB'
-        self.subgenre = 'DBB'
         self.name = 'DBB'
         self.wallet = wallet
-        self.dd_policy = dd_policy
-        self.dd_source = dd_source
+        self.policy = policy
+        self.source = source
         self.decision_var = decision_var
         self.disclosed_var = decision_var
-        self.action = 'keep'
-        self.dd_kappas = dd_kappas
-        self.dd_qual_vars = dd_qual_vars
-        self.dd_backwardness = dd_backwardness
-        self.dd_avg_time = dd_avg_time
-        self.dd_discount = dd_discount
-        self.dd_policy = dd_policy
+        self.verdict = 'keep'
+        self.LSS_tresh = LSS_tresh
+        self.impatience = impatience
+        self.disclosed_thresh = disclosed_thresh
+        self.past_weight = past_weight
+        self.memory = memory
+        self.discount = discount
         self.policies = policies
-        self.dd_index = dd_index
-        self.index_per_source = {1: 0, 2: 0, 4: 0, 5: 0}
-        self.dd_eta = dd_eta
-        self.dd_ambition = dd_ambition
-        self.dd_target = dd_target
-        self.dd_rationale = dd_rationale
-        self.financing_index = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        self.index_per_source = {1: 0, 2: 0}
+        self.rationale = rationale
+        self.financing_index = {0: 0, 1: 0, 2: 0}
         self.Portfolio = Portfolio
-        self.receivable = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        self.receivable = {0: 0, 1: 0, 2: 0}
         self.accepted_sources = accepted_sources
         self.car_ratio = 0
-        self.dd_SorT = dd_SorT
+        # self.subgenre = 'DBB'
+        # self.dd_qual_vars = dd_qual_vars
+        # self.dd_policy = dd_policy
+        # self.dd_index = dd_index
+        # self.dd_eta = dd_eta
+        # self.dd_ambition = dd_ambition
+        # self.dd_target = dd_target
+        # self.dd_SorT = dd_SorT
 
-        self.action = env.process(run_DBB(self.NPV_THRESHOLD_DBB,
-                                          self.guaranteed_contracts,
-                                          self.genre,
-                                          self.subgenre,
-                                          self.name,
-                                          self.wallet,
-                                          self.dd_policy,
-                                          self.dd_source,
-                                          self.decision_var,
-                                          self.disclosed_var,
-                                          self.action,
-                                          self.dd_kappas,
-                                          self.dd_qual_vars,
-                                          self.dd_backwardness,
-                                          self.dd_avg_time,
-                                          self.dd_discount,
-                                          self.policies,
-                                          self.dd_index,
-                                          self.index_per_source,
-                                          self.dd_eta,
-                                          self.dd_ambition,
-                                          self.dd_target,
-                                          self.dd_rationale,
-                                          self.financing_index,
-                                          self.Portfolio,
-                                          self.receivable,
-                                          self.accepted_sources,
-                                          self.car_ratio,
-                                          self.dd_SorT))
+        self.action = env.process(run_DBB(
+            self.NPV_THRESHOLD_DBB,
+            self.guaranteed_contracts,
+            self.genre,
+            self.name,
+            self.wallet,
+            self.policy,
+            self.source,
+            self.decision_var,
+            self.disclosed_var,
+            self.verdict,
+            self.LSS_tresh,
+            self.impatience,
+            self.disclosed_thresh,
+            self.past_weight,
+            self.memory,
+            self.discount,
+            self.policies,
+            self.index_per_source,
+            self.rationale,
+            self.financing_index,
+            self.Portfolio,
+            self.receivable,
+            self.accepted_sources,
+            self.car_ratio))
 
 
-def run_BB(financing_index,
-           Portfolio,
-           receivable,
-           accepted_sources,
-           car_ratio,
-           name,
+def run_BB(NPV_THRESHOLD_DBB,
+           guaranteed_contracts,
            genre,
-           subgenre,
+           name,
            wallet,
-           profits,
-           dd_profits,
-           dd_source,
+           policy,
+           source,
            decision_var,
-           action,
-           dd_kappas,
-           dd_qual_vars,
-           dd_backwardness,
-           dd_avg_time,
-           dd_discount,
-           dd_strategies,
-           dd_index):
+           disclosed_var,
+           verdict,
+           LSS_tresh,
+           impatience,
+           disclosed_thresh,
+           past_weight,
+           memory,
+           discount,
+           policies,
+           index_per_source,
+           rationale,
+           financing_index,
+           Portfolio):
 
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, config.NPV_THRESHOLD, config.RISKS, config.env  # globals
 
@@ -1536,30 +1541,23 @@ class BB(object):
                                          ))
 
 
-def run_EP(genre,
-           accepted_sources,
+def run_EP(env,
            name,
            wallet,
-           profits,
-           EorM,
-           subgenre,
-           capacity,
            portfolio_of_plants,
            portfolio_of_projects,
            periodicity,
-           subgenre_price,
            tolerance,
            last_acquisition_period,
-           dd_profits,
-           dd_source,
-           action,
-           dd_kappas,
-           dd_qual_vars,
-           dd_backwardness,
-           dd_avg_time,
-           dd_discount,
-           dd_strategies,
-           dd_index):
+           source,
+           decision_var,
+           LSS_thresh,
+           impatience,
+           memory,
+           discount,
+           past_weight,
+           current_weight,
+           index):
 
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.env
 
@@ -1621,7 +1619,7 @@ def run_EP(genre,
                     wallet += i['MWh'] * i['price'] - i['OPEX']
                     profits += i['MWh'] * i['price'] - i['OPEX']
 
-                    """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the policy makers, other EPs and the demmand to do some calculations """
+                    """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the policy makers, other EPs and the demand to do some calculations """
                     code = uuid.uuid4().int
                     """ this is to get a unique and random number """
                     j = i.copy()
@@ -1965,61 +1963,64 @@ def run_EP(genre,
 
 
 class EP(object):
-    def __init__(self, env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects,
-                 periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_kappas, dd_qual_vars,
-                 dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index):
+    def __init__(self, env, name, wallet, portfolio_of_plants, portfolio_of_projects,
+                 periodicity, tolerance, last_acquisition_period, source, decision_var, LSS_thresh,
+                 impatience, memory, discount, past_weight, current_weight, index):
+
+        # Pre-Q variables:
+        # self, env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects,
+        #                  periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_kappas,
+        #                  dd_qual_vars,
+        #                  dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index
+
         self.env = env
         self.genre = 'EP'
-        self.accepted_sources = accepted_sources
+        # self.accepted_sources = accepted_sources
         self.name = name
         self.wallet = wallet
         self.profits = 0
-        self.EorM = EorM
-        self.subgenre = EorM
-        self.capacity = {0: 0, 1: 0, 2: 0} if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
+        self.impatience = impatience
+        self.current_weight = current_weight
+        self.LSS_thresh = LSS_thresh
+        # self.EorM = EorM
+        # self.subgenre = EorM
+        self.capacity = {0: 0, 1: 0, 2: 0} # if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
         self.portfolio_of_plants = portfolio_of_plants
         self.portfolio_of_projects = portfolio_of_projects
         self.periodicity = periodicity
-        self.subgenre_price = {0: 0, 1: 0, 2: 0} if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
+        self.subgenre_price = {0: 0, 1: 0, 2: 0} # if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
         self.tolerance = tolerance
         self.last_acquisition_period = last_acquisition_period
         self.dd_profits = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0,
                            5: 0}  # same as profits, but as dict. Makes accounting faster and simpler
-        self.dd_source = dd_source  # This, my ganzirosis, used to be the Tactics. It is the first of the ranked dictionaries. It goes a little sumthing like dis: dd = {'current' : 2, 'ranks' : {0: 3500, 1: 720, 2: 8000}}. With that we have the current decision for the variable or thing and on the ranks we have the score for
-        self.decision_var = decision_var  # this is the value of the decision variable. Is a number between -1 and 1
-        self.action = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add'
-        self.dd_kappas = dd_kappas  # this is the kappa, follows the current ranked dictionary
-        self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
-        self.dd_backwardness = dd_backwardness  # also a ranked dictionary, this one tells the backwardness of agents
-        self.dd_avg_time = dd_avg_time  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
-        self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
-        self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
-        self.dd_index = dd_index
+        self.source = source
+        self.decision_var = decision_var  # this is the value of the decision variable. Is a number between 0 and 1
+        self.verdict = "keep"  # this is the action variable. It can be either 'keep', 'change' or 'add'
+        self.LSS_thresh = LSS_thresh  # this is the kappa, follows the current ranked dictionary
+        # self.dd_qual_vars = dd_qual_vars  # this tells the agent the qualitative variables in a form {0 : 'name of the zeroth variable', 1 : 'name of the first variable', 2 : 'name of the second variable'}
+        self.past_weight = past_weight  # also a ranked dictionary, this one tells the backwardness of agents
+        self.memory = memory  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
+        self.discount = discount  # discount factor. Is a ranked dictionary
+        # self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
+        self.index = index
 
-        self.action = env.process(run_EP(self.genre,
-                                         self.accepted_sources,
+        self.action = env.process(run_EP(self.env,
                                          self.name,
                                          self.wallet,
-                                         self.profits,
-                                         self.EorM,
-                                         self.subgenre,
-                                         self.capacity,
                                          self.portfolio_of_plants,
                                          self.portfolio_of_projects,
                                          self.periodicity,
-                                         self.subgenre_price,
                                          self.tolerance,
                                          self.last_acquisition_period,
-                                         self.dd_profits,
-                                         self.dd_source,
-                                         self.action,
-                                         self.dd_kappas,
-                                         self.dd_qual_vars,
-                                         self.dd_backwardness,
-                                         self.dd_avg_time,
-                                         self.dd_discount,
-                                         self.dd_strategies,
-                                         self.dd_index))
+                                         self.source,
+                                         self.decision_var,
+                                         self.LSS_thresh,
+                                         self.impatience,
+                                         self.memory,
+                                         self.discount,
+                                         self.past_weight,
+                                         self.current_weight,
+                                         self.index))
 
 
 def run_DD(genre,

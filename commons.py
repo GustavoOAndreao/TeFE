@@ -529,7 +529,7 @@ def evaluating_FF(name):
 
     add = {'EP': False,
            'TP': False,
-           'BB': True,
+           'BB': False,
            'EPM': True,
            'TPM': True,
            'DBB': True}
