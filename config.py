@@ -45,7 +45,7 @@ MARGIN = .1
 INITIAL_DEMAND = {'E': 100, 'M': 80}
 STARTING_PRICE = 25
 RADICAL_THRESHOLD = 2
-RISKS = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+RISKS = {0: 0, 1: 0, 2: 0}
 
 THERMAL = {"CAPEX": 20000000,
            'OPEX': 30000,
