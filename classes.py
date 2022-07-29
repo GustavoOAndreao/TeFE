@@ -45,7 +45,6 @@ def run_TP(name,
            cap_conditions,
            capped,
            dd_strategies):
-
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, TACTIC_DISCOUNT, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.TACTIC_DISCOUNT, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env  # globals
 
     while True:
@@ -279,7 +278,7 @@ def run_TP(name,
 
         profits_dedicting_FF(name)
         if env.now > 0:
-            post_evaluating_FF(decisions['strikes'], name)
+            post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
 
@@ -399,7 +398,6 @@ def run_TPM(genre,
             dd_target,
             dd_rationale,
             dd_SorT):
-
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, AMMORT, TACTIC_DISCOUNT, INSTRUMENT_TO_SOURCE_DICT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.AMMORT, config.TACTIC_DISCOUNT, config.INSTRUMENT_TO_SOURCE_DICT, config.env
 
     while True:
@@ -412,7 +410,7 @@ def run_TPM(genre,
         #################################################################
 
         list_of_strikables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time,
-                               dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
+                              dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
         policy = dd_policy['current']
         source = dd_source['current']
@@ -563,7 +561,7 @@ def run_TPM(genre,
                 "value": value,
             }})
         if env.now > 0:
-            post_evaluating_FF(decisions['strikes'], name)
+            post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
 
@@ -648,7 +646,6 @@ def run_EPM(genre,
             dd_rationale,
             auction_capacity,
             dd_SorT):
-
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, DEMAND, M_CONTRACT_LIMIT, AUCTION_WANTED_SOURCES, AMMORT, TACTIC_DISCOUNT, INSTRUMENT_TO_SOURCE_DICT, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.DEMAND, config.M_CONTRACT_LIMIT, config.AUCTION_WANTED_SOURCES, config.AMMORT, config.TACTIC_DISCOUNT, config.INSTRUMENT_TO_SOURCE_DICT, config.MARGIN, config.env  # globals
 
     while True:
@@ -661,7 +658,7 @@ def run_EPM(genre,
         #################################################################
 
         list_of_strikables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time,
-                               dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
+                              dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
 
         policy = dd_policy['current']
         source = dd_source['current']
@@ -815,8 +812,8 @@ def run_EPM(genre,
                             CONTRACTS[env.now].update({code: {
                                 'status': 'project',
                                 'price': (possible_projects[i]['OPEX'] + (
-                                            possible_projects[i]['CAPEX'] / possible_projects[i]['lifetime'])) * (
-                                                     1 + MARGIN) / possible_projects[i]['MWh'],
+                                        possible_projects[i]['CAPEX'] / possible_projects[i]['lifetime'])) * (
+                                                 1 + MARGIN) / possible_projects[i]['MWh'],
                                 'auction_contracted': True,
                                 'price_expiration': env.now + PPA_expiration + PPA_limit + 1,
                                 'limit': env.now + PPA_limit + 1
@@ -899,7 +896,7 @@ def run_EPM(genre,
             "source": source,
         }})
         if env.now > 0:
-            post_evaluating_FF(decisions['strikes'], name)
+            post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
 
@@ -969,10 +966,8 @@ class EPM(object):
 
 
 class DBB(object):
-    def __init__(self, env, wallet, policy, source, decision_var, LSS_tresh, past_weight,
-                 memory, discount, policies, impatience, disclosed_thresh, rationale, Portfolio,
-                 accepted_sources):
-
+    def __init__(self, env, wallet, policy, source, decision_var, LSS_thresh, past_weight,
+                 memory, discount, policies, impatience, disclosed_thresh, rationale):
         # Pre-Q:
         # self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
         #                  dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale,
@@ -990,7 +985,7 @@ class DBB(object):
         self.decision_var = decision_var
         self.disclosed_var = decision_var
         self.verdict = 'keep'
-        self.LSS_tresh = LSS_tresh
+        self.LSS_thresh = LSS_thresh
         self.impatience = impatience
         self.disclosed_thresh = disclosed_thresh
         self.past_weight = past_weight
@@ -999,7 +994,6 @@ class DBB(object):
         self.policies = policies
         self.rationale = rationale
         self.financing_index = {0: 0, 1: 0, 2: 0}
-        self.Portfolio = Portfolio
         self.receivable = {0: 0, 1: 0, 2: 0}
         self.car_ratio = 0
         # self.subgenre = 'DBB'
@@ -1012,15 +1006,14 @@ class DBB(object):
         # self.dd_SorT = dd_SorT
 
         strikables_dict = {'impatience': impatience,
-                            'LSS_thresh': LSS_thresh,
-                            'tolerance': tolerance,
-                            'source': source,
-                            'past_weight': past_weight,
-                            'memory': memory,
-                            'discount': discount,
-                            'disclosed_thresh': disclosed_thresh,
-                            'rationale': rationale
-                            }
+                           'LSS_thresh': LSS_thresh,
+                           'source': source,
+                           'past_weight': past_weight,
+                           'memory': memory,
+                           'discount': discount,
+                           'disclosed_thresh': disclosed_thresh,
+                           'rationale': rationale
+                           }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
 
@@ -1035,7 +1028,7 @@ class DBB(object):
             self.decision_var,
             self.disclosed_var,
             self.verdict,
-            self.LSS_tresh,
+            self.LSS_thresh,
             self.impatience,
             self.disclosed_thresh,
             self.past_weight,
@@ -1044,7 +1037,6 @@ class DBB(object):
             self.policies,
             self.rationale,
             self.financing_index,
-            self.Portfolio,
             self.receivable,
             self.car_ratio,
             self.strikables_dict))
@@ -1060,7 +1052,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             decision_var,
             disclosed_var,
             verdict,
-            LSS_tresh,
+            LSS_thresh,
             impatience,
             disclosed_thresh,
             past_weight,
@@ -1069,12 +1061,10 @@ def run_DBB(NPV_THRESHOLD_DBB,
             policies,
             rationale,
             financing_index,
-            Portfolio,
             receivable,
             car_ratio,
             strikables_dict):
-
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.env  # globals
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.AGENTS_r, config.env  # globals
 
     while True:
 
@@ -1085,18 +1075,13 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-
-        _LSS_thresh = LSS_thresh[0]
-        _past_weight = past_weight[0]
-        _source = source[0]
-        _LSS_thresh = LSS_thresh[0]
-        _policy = policy[0]
-        _source = source[0]
-        _memory = memory[0]
-        _discount = discount[0]
-        _impatience = impatience[0]
-        _current_weight = current_weight[0]
-        _rationale = rationale[0]
+        _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now-1][name]['LSS_thresh'][0]
+        _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now-1][name]['past_weight'][0]
+        _source = source[0] if env.now == 0 else AGENTS[env.now-1][name]['source'][0]
+        _memory = memory[0] if env.now == 0 else AGENTS[env.now-1][name]['memory'][0]
+        _discount = discount[0] if env.now == 0 else AGENTS[env.now-1][name]['discount'][0]
+        _impatience = impatience[0] if env.now == 0 else AGENTS[env.now-1][name]['impatience'][0]
+        _rationale = rationale[0] if env.now == 0 else AGENTS[env.now-1][name]['rationale'][0]
         value = disclosed_var
 
         #################################################################
@@ -1158,35 +1143,36 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-        policy_pool = []
-        policy_pool.append(policy)
-        policy_pool.append(
-            policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
+        policy_pool = [policy]
+
+        if len(policies) > 0:
+            policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwards
+            # all the other policies
 
         if env.now >= 2:
             for entry in policy_pool:
                 instrument = entry['instrument']
-                source = entry['source']
+                chosen_source = entry['source'] if 'source' in entry else _source
                 budget = entry['budget'] if 'budget' in entry else value * wallet
                 value = disclosed_var if 'value' not in entry else entry['value']
 
                 if instrument == 'finance' and len(CONTRACTS[env.now - 1]) > 0:
-                    financing = financing_FF(genre, source, name, wallet, receivable, value, financing_index)
+                    financing = financing_FF(genre, name, wallet, receivable, value, financing_index,
+                                             accepted_source=chosen_source)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
 
                 else:
                     """ We are dealing with guarantees """
-                    financing = financing_FF(genre, source, name, wallet, receivable, value, financing_index, True)
+                    financing = financing_FF(genre, name, wallet, receivable, value, financing_index,
+                                             guaranteeing=True, accepted_source=chosen_source)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
                     financing_index = financing['financing_index']
 
                 """ and now back to the actual variables for the current policy"""
-            instrument = policies[0]['instrument']
-            source = policies[0]['source']
             value = disclosed_var
 
         #################################################################
@@ -1196,11 +1182,11 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-        add_source = source_reporting_FF(name)
-
-        for entry in dd_source['ranks']:
-            dd_source['ranks'][entry] *= (1 - discount)
-            dd_source['ranks'][entry] += add_source[entry]
+        if env.now > 2:
+            add_source = source_reporting_FF(name, _past_weight)
+            for entry in range(len(source)-1):
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+                source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
         #################################################################
         #                                                               #
@@ -1210,7 +1196,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
 
         if env.now > 0:
             decision_var = max(0, min(1, public_deciding_FF(name)))
-            disclosed_var = thresholding_FF(LSS_tresh, disclosed_var, decision_var)
+            disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
+            decisions = evaluating_FF(name)
 
         #################################################################
         #                                                               #
@@ -1218,50 +1205,35 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-        AGENTS[env.now].update({
-            name: {
+        update = {
                 "NPV_THRESHOLD_DBB": NPV_THRESHOLD_DBB,
                 "guaranteed_contracts": guaranteed_contracts,
                 "genre": genre,
-                "subgenre": subgenre,
                 "name": name,
                 "wallet": wallet,
-                "dd_policy": dd_policy,
-                "dd_source": dd_source,
+                "policy": policy,
+                "source": source,
                 "decision_var": decision_var,
                 "disclosed_var": disclosed_var,
                 "verdict": verdict,
-                "dd_kappas": dd_kappas,
-                "dd_qual_vars": dd_qual_vars,
-                "dd_backwardness": dd_backwardness,
-                "dd_avg_time": dd_avg_time,
-                "dd_discount": dd_discount,
-                "policies": policies,
-                "dd_index": dd_index,
-                "index_per_source": index_per_source,
-                "dd_eta": dd_eta,
-                "dd_ambition": dd_ambition,
-                "dd_target": dd_target,
-                "dd_rationale": dd_rationale,
-                "financing_index": financing_index,
-                "Portfolio": Portfolio,
-                "receivable": receivable,
-                "accepted_sources": accepted_sources,
-                "car_ratio": car_ratio,
-                "policy": policy,
-                "source": source,
-                "kappa": kappa,
-                "backwardness": backwardness,
-                "avg_time": avg_time,
+                "LSS_thresh": LSS_thresh,
+                "impatience": impatience,
+                "disclosed_thresh": disclosed_thresh,
+                "past_weight": past_weight,
+                "memory": memory,
                 "discount": discount,
-                "index": index,
-                "eta_acc": eta_acc,
-                "ambition": ambition,
+                "policies": policies,
                 "rationale": rationale,
-                "value": value
-            }})
+                "financing_index": financing_index,
+                "receivable": receivable,
+                "car_ratio": car_ratio,
+                "strikables_dict": strikables_dict,
+                "current_state": current_stating_FF(_rationale)
+            }
+
+        AGENTS[env.now][name] = update.copy()
         if env.now > 0:
-            post_evaluating_FF(decisions['strikes'], name)
+            post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
 
@@ -1276,7 +1248,7 @@ def run_BB(NPV_THRESHOLD_DBB,
            decision_var,
            disclosed_var,
            verdict,
-           LSS_tresh,
+           LSS_thresh,
            impatience,
            disclosed_thresh,
            past_weight,
@@ -1287,7 +1259,6 @@ def run_BB(NPV_THRESHOLD_DBB,
            rationale,
            financing_index,
            Portfolio):
-
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, config.NPV_THRESHOLD, config.RISKS, config.env  # globals
 
     while True:
@@ -1352,7 +1323,7 @@ def run_BB(NPV_THRESHOLD_DBB,
         #################################################################
 
         if env.now > 0 and len(CONTRACTS[env.now - 1]) > 0:
-            financing = financing_FF(genre, accepted_sources, name, wallet, receivable, value, financing_index)
+            financing = financing_FF(genre, name, wallet, receivable, value, financing_index)
 
             wallet = financing['wallet']
             receivable = financing['receivables']
@@ -1421,7 +1392,7 @@ def run_BB(NPV_THRESHOLD_DBB,
 
         profits_dedicting_FF(name)
         if env.now > 0:
-            post_evaluating_FF(decisions['strikes'], name)
+            post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
 
@@ -1473,8 +1444,7 @@ class BB(object):
 class EP(object):
     def __init__(self, env, name, wallet, portfolio_of_plants, portfolio_of_projects,
                  periodicity, tolerance, last_acquisition_period, source, decision_var, LSS_thresh,
-                 impatience, memory, discount, past_weight, current_weight, index):
-
+                 impatience, memory, discount, past_weight, current_weight):
         # Pre-Q variables:
         # self, env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects,
         #                  periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_kappas,
@@ -1491,15 +1461,14 @@ class EP(object):
         self.current_weight = current_weight
         # self.EorM = EorM
         # self.subgenre = EorM
-        self.capacity = {0: 0, 1: 0, 2: 0} # if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
+        self.capacity = {0: 0, 1: 0, 2: 0}  # if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
         self.portfolio_of_plants = portfolio_of_plants
         self.portfolio_of_projects = portfolio_of_projects
         self.periodicity = periodicity
-        self.subgenre_price = {0: 0, 1: 0, 2: 0} # if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
+        self.subgenre_price = {0: 0, 1: 0, 2: 0}  # if self.EorM == 'E' else {3: 0, 4: 0, 5: 0}
         self.tolerance = tolerance
         self.last_acquisition_period = last_acquisition_period
-        self.dd_profits = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0,
-                           5: 0}  # same as profits, but as dict. Makes accounting faster and simpler
+        self.dd_profits = {0: 0, 1: 0, 2: 0}  # same as profits, but as dict. Makes accounting faster and simpler
         self.source = source
         self.decision_var = decision_var  # this is the value of the decision variable. Is a number between 0 and 1
         self.verdict = "keep"  # this is the verdict variable. It can be either 'keep', 'change' or 'add'
@@ -1509,24 +1478,24 @@ class EP(object):
         self.memory = memory  # also a ranked dictionary, this one tells the average time for deciding if change is necessary
         self.discount = discount  # discount factor. Is a ranked dictionary
         # self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
-        self.index = index
+        self.index = {0: 0, 1: 0, 2: 0}
 
         strikables_dict = {'impatience': impatience,
-                            'LSS_thresh': LSS_thresh,
-                            'tolerance': tolerance,
-                            'source': source,
-                            'past_weight': past_weight,
-                            'memory': memory,
-                            'discount': discount}
+                           'LSS_thresh': LSS_thresh,
+                           'tolerance': tolerance,
+                           'source': source,
+                           'past_weight': past_weight,
+                           'memory': memory,
+                           'discount': discount}
 
         self.strikables_dict = strikable_dicting(strikables_dict)
 
-
-
-
         self.strikables_dict = strikables_dict
 
+        self.profits = 0
+
         self.action = env.process(run_EP(self.env,
+                                         self.genre,
                                          self.name,
                                          self.wallet,
                                          self.portfolio_of_plants,
@@ -1544,10 +1513,13 @@ class EP(object):
                                          self.current_weight,
                                          self.index,
                                          self.strikables_dict,
-                                         self.verdict))
+                                         self.verdict,
+                                         self.profits,
+                                         self.dd_profits))
 
 
 def run_EP(env,
+           genre,
            name,
            wallet,
            portfolio_of_plants,
@@ -1565,9 +1537,10 @@ def run_EP(env,
            current_weight,
            index,
            strikables_dict,
-           verdict):
-
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.env
+           verdict,
+           profits,
+           dd_profits):
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.AGENTS_r, config.env
 
     while True:
 
@@ -1606,6 +1579,7 @@ def run_EP(env,
                     """ if the plant is mine and it is contracted, I'll collect profits """
                     wallet += i['MWh'] * i['price'] - i['OPEX']
                     profits += i['MWh'] * i['price'] - i['OPEX']
+                    dd_profits[i['source']] += i['MWh'] * i['price'] - i['OPEX']
 
                     """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the policy makers, other EPs and the demand to do some calculations """
                     code = uuid.uuid4().int
@@ -1736,7 +1710,8 @@ def run_EP(env,
                                'MWh': i['MWh']
                                }
                     })
-                elif (i['guarantee'] == True or i['auction_contracted'] == True) and i['receiver'] == name and i['status'] == 'project' and 'failed_attempts' not in i:
+                elif (i['guarantee'] == True or i['auction_contracted'] == True) and i['receiver'] == name and i[
+                    'status'] == 'project' and 'failed_attempts' not in i:
                     """ if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to 
                     be be inserrted into the portfolio_of_projects dictionary """
                     j = i.copy()
@@ -1799,7 +1774,7 @@ def run_EP(env,
         #                                                           #
         #############################################################
 
-        if env.now % periodicity == 0 and env.now > 1 + periodicity and decision_var > 0 and wallet > 0:
+        if env.now % periodicity == 0 and env.now > 1 + periodicity and value > 0 and wallet > 0:
             TP = {'TP': 0,
                   'NPV': False,
                   'Lumps': 0,
@@ -1810,7 +1785,7 @@ def run_EP(env,
                 i = TECHNOLOGIC[env.now - 1][_]
                 if i['source'] == _source:
                     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
-                    Lumps = np.ceil((decision_var * DEMAND[env.now]) / i['MW'])
+                    Lumps = np.ceil((value * DEMAND[env.now]) / i['MW'])
                     price = source_price[i['source']]
                     NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'],
                                             i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
@@ -1833,12 +1808,14 @@ def run_EP(env,
                 for _ in AGENTS[env.now - 1]:
                     """ we must check at this period, because the EP goes after the bank """
                     agent = AGENTS[env.now - 1][_]
-                    if agent['genre'] == 'BB' or agent['genre'] == 'DBB':
-                        BB_.append([agent['name'], agent['financing_index'][source]])
+                    if agent['genre'] == 'BB':
+                        BB_.append([agent['name'], agent['decision_var']])
+                    elif agent['genre'] == 'DBB':
+                        BB_.append([agent['name'], agent['disclosed_var']])
                 number = np.random.poisson(1)
                 print(BB_)
                 number = number if number < len(BB_) else len(BB_) - 1
-                _BB = sorted(BB_, key=lambda x: x[1], reverse=True)[number][0]
+                _BB = sorted(BB_, key=lambda x: x[1])[number][0]
                 # first we sort the list of agents. With the .values() we have both keys and values. The [number]
                 # selects the random pick of which source to get. The ['name'] selects the name of the bank
                 receiver = _BB
@@ -1899,11 +1876,13 @@ def run_EP(env,
         #                       its intervention                        #
         #                                                               #
         #################################################################
-        add_source = source_reporting_FF(name, _past_weight, index)
-        for entry in source:
+        if env.now > 0:
+            add_source = source_reporting_FF(name, _past_weight, index)
+            for entry in range(len(source)-1):
 
-            source[entry].get(list(source[entry].keys())[0]) *= (1 - discount)
-            source[entry].get(list(source[entry].keys())[0]) += add_source[list(source[entry].keys())[0]]
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+
+                source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
         #################################################################
         #                                                               #
@@ -1919,45 +1898,66 @@ def run_EP(env,
         #  Before leaving, the agent must update the outside world  #
         #                                                           #
         #############################################################
-        AGENTS[env.now].update({
-            name:
-                {"name" : name,
-                 "wallet" : wallet,
-                 "portfolio_of_plants" : portfolio_of_plants,
-                 "portfolio_of_projects" : portfolio_of_projects,
-                 "periodicity" : periodicity,
-                 "tolerance" : tolerance,
-                 "last_acquisition_period" : last_acquisition_period,
-                 "source" : source,
-                 "decision_var" : decision_var,
-                 "LSS_thresh" : LSS_thresh,
-                 "impatience" : impatience,
-                 "memory" : memory,
-                 "discount" : discount,
-                 "past_weight" : past_weight,
-                 "current_weight" : current_weight,
-                 "index" : index,
-                 "strikables_dict" : strikables_dict,
-                 "verdict" : verdict
-                 }})
-        profits_dedicting_FF(name)
+        update={"name": name,
+                 "genre": genre,
+                 "wallet": wallet,
+                 "portfolio_of_plants": portfolio_of_plants,
+                 "portfolio_of_projects": portfolio_of_projects,
+                 "periodicity": periodicity,
+                 "tolerance": tolerance,
+                 "last_acquisition_period": last_acquisition_period,
+                 "source": source,
+                 "decision_var": decision_var,
+                 "LSS_thresh": LSS_thresh,
+                 "impatience": impatience,
+                 "memory": memory,
+                 "discount": discount,
+                 "past_weight": past_weight,
+                 "current_weight": current_weight,
+                 "index": index,
+                 "strikables_dict": strikables_dict,
+                 "verdict": verdict,
+                 "profits": profits,
+                 "dd_profits": dd_profits
+                 }
+
+        AGENTS[env.now][name] = update.copy()
         if env.now > 0:
-            post_evaluating_FF(decisions['strikes'], name)
+            post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
+            profits_dedicting_FF(name)
 
         yield env.timeout(1)
 
 
-def run_DD(genre,
+class Demand(object):
+    def __init__(self, env, initial_demand, when, increase):
+        self.env = env
+        self.genre = 'D'
+        self.name = 'D'
+        self.initial_demand = initial_demand
+        self.when = when
+        self.increase = increase
+        self.action = env.process(run_DD(self.env,
+                                         self.genre,
+                                         self.name,
+                                         self.initial_demand,
+                                         self.when,
+                                         self.increase))
+
+
+def run_DD(env,
+           genre,
            name,
            initial_demand,
-           specificities):
-
+           when,
+           increase):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.env
 
     while True:
 
-        from_time_to_agents_FF(AGENTS)
-        from_time_to_agents_FF(TECHNOLOGIC)
+        print(env.now)
+        #from_time_to_agents_FF(AGENTS)
+        #from_time_to_agents_FF(TECHNOLOGIC)
 
         #################################################################
         #                                                               #
@@ -2003,20 +2003,12 @@ def run_DD(genre,
                     MIX[env.now][i['code']].update({
                         'price': price})
 
-        if env.now % 10 == 0:
-            print('time', env.now)
-
-        when = specificities['when']
-        increase = specificities['increase']
-        # green_awareness = specificities['green_awareness']
-
         if env.now == 0:
-            DEMAND = {env.now: initial_demand}
+            DEMAND.update({env.now: initial_demand})
         else:
-            DEMAND.update({env.now: DEMAND})
+            DEMAND.update({env.now: DEMAND[env.now-1]})
 
         if env.now % when == 0 and env.now != 0:
-
             """ first, we get how much green is E or M"""
             """greeness = {'E': 0, 'M': 0}
             total = 0
@@ -2042,22 +2034,9 @@ def run_DD(genre,
             M_pendulum *= pendulum_demand
             M_increase = DEMAND[env.now - 1]['M'] * specificities['increase'] + M_pendulum"""
 
-            DEMAND.update({env.now:DEMAND + increase})
+            DEMAND.update({env.now: DEMAND + increase})
 
         yield env.timeout(1)
-
-
-class Demand(object):
-    def __init__(self, env, initial_demand, specificities):
-        self.env = env
-        self.genre = 'D'
-        self.name = 'D'
-        self.initial_demand = initial_demand
-        self.specificities = specificities
-        self.action = env.process(run_DD(self.genre,
-                                         self.name,
-                                         self.initial_demand,
-                                         self.specificities))
 
 
 def Create(genre, traits):
@@ -2105,10 +2084,11 @@ def Create(genre, traits):
             PPA_expiration = traits.get('PPA_expiration')  # for how many months do PPA contracts stand?
             PPA_limit = traits.get('PPA_limit')  # how many months do companies have to build auction
             COUNTDOWN = traits.get('auction_countdown')  # how many months are spent between annoucing and deciding
-            auction_capacity = traits.get('auction_capacity') # the full capacity of an auction
+            auction_capacity = traits.get('auction_capacity')  # the full capacity of an auction
             # an auction?
             energy_policy_maker = EPM(env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, dd_policy, dd_source,
-                                      decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale,
+                                      decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount,
+                                      policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale,
                                       auction_capacity, dd_SorT)
 
         else:
@@ -2120,9 +2100,11 @@ def Create(genre, traits):
             #################################################################
             accepted_sources = traits.get('accepted_sources')
             Portfolio = traits.get('Portfolio')
-            Development_Bank = DBB(env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
-                 dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, Portfolio,
-                 accepted_sources, dd_SorT)
+            Development_Bank = DBB(env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars,
+                                   dd_backwardness,
+                                   dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target,
+                                   dd_rationale, Portfolio,
+                                   accepted_sources, dd_SorT)
     else:
         """ so we are dealing with private agents """
         if genre == 'BB':
@@ -2141,7 +2123,7 @@ def Create(genre, traits):
             dd_index = traits.get('dd_index')
 
             STARTING_NAME = BB(env, Portfolio, accepted_sources, name, wallet, dd_source, decision_var, dd_kappas,
-                               dd_qual_vars,dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index)
+                               dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index)
 
         elif genre == 'EP':
 
@@ -2164,8 +2146,8 @@ def Create(genre, traits):
             dd_strategies = traits.get('dd_strategies')
 
             name = EP(env, accepted_sources, name, wallet, EorM, portfolio_of_plants, portfolio_of_projects,
-                 periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_kappas, dd_qual_vars,
-                 dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index)
+                      periodicity, tolerance, last_acquisition_period, dd_source, decision_var, dd_kappas, dd_qual_vars,
+                      dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index)
 
         else:
 
@@ -2223,7 +2205,7 @@ def Create(genre, traits):
             dd_strategies = traits.get('dd_strategies')
 
             name = TP(env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold, dd_source,
-                 decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, cap_conditions,
-                 strategy, dd_strategies)
+                      decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, cap_conditions,
+                      strategy, dd_strategies)
 
     return print('genre :', genre, ', traits:', traits, '. \n')
