@@ -32,12 +32,12 @@ TECHNOLOGIC_r = {}
 r = 0.001
 POLICY_EXPIRATION_DATE = 12 * 10
 rNd_INCREASE = 0.5
-M_CONTRACT_LIMIT = 2 * 12
+# M_CONTRACT_LIMIT = 2 * 12
 AUCTION_WANTED_SOURCES = []
 AMMORT = 20 * 12
 NPV_THRESHOLD = 0
 NPV_THRESHOLD_DBB = 0
-INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 4: [4], 5: [5], 45: [4, 5], 1245: [1, 2, 4, 5]}
+INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2]}
 BASEL = 0.105
 MARGIN = .1
 INITIAL_DEMAND = 100
@@ -108,7 +108,7 @@ for j in range(SIM_TIME):
                                           'avoided_emissions': 50},
                             'TP_wind' : {'name': 'TP_wind',
                                           "green": True,
-                                          "source": 2,
+                                          "source": 1,
                                           "source_name": 'solar',
                                           "CAPEX": WIND['CAPEX'],
                                           'OPEX': WIND['OPEX'],

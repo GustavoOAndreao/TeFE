@@ -1077,7 +1077,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
 
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now-1][name]['LSS_thresh'][0]
         _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now-1][name]['past_weight'][0]
-        _source = source[0] if env.now == 0 else AGENTS[env.now-1][name]['source'][0]
+        _source = list(source[0].keys())[0] if env.now == 0 else list(AGENTS[env.now-1][name]['source'][0].keys())[0]
         _memory = memory[0] if env.now == 0 else AGENTS[env.now-1][name]['memory'][0]
         _discount = discount[0] if env.now == 0 else AGENTS[env.now-1][name]['discount'][0]
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now-1][name]['impatience'][0]
@@ -1551,14 +1551,15 @@ def run_EP(env,
         #                                                               #
         #################################################################
 
-        _source = source[0]
-        _LSS_thresh = LSS_thresh[0]
-        _past_weight = past_weight[0]
-        _memory = memory[0]
-        _discount = discount[0]
-        _impatience = impatience[0]
-        _current_weight = current_weight[0]
-        index = indexing_FF(name) if env.now > 0 else {0: 0, 1: 0, 2: 0}
+        _source = list(source[0].keys())[0] if env.now == 0 else list(AGENTS[env.now-1][name]['source'][0].keys())[0]
+        _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now-1][name]['LSS_thresh'][0]
+        _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now-1][name]['past_weight'][0]
+        _memory = memory[0] if env.now == 0 else AGENTS[env.now-1][name]['memory'][0]
+        _discount = discount[0] if env.now == 0 else AGENTS[env.now-1][name]['discount'][0]
+        _impatience = impatience[0] if env.now == 0 else AGENTS[env.now-1][name]['impatience'][0]
+        _current_weight = current_weight[0] if env.now == 0 else AGENTS[env.now-1][name]['current_weight'][0]
+        _tolerance = tolerance[0] if env.now == 0 else AGENTS[env.now-1][name]['tolerance'][0]
+        index = {0: 0, 1: 0, 2: 0} if env.now == 0 else indexing_FF(name)
         value = decision_var
         profits = 0  # in order to get the profits of this period alone
 
@@ -1581,11 +1582,13 @@ def run_EP(env,
                     profits += i['MWh'] * i['price'] - i['OPEX']
                     dd_profits[i['source']] += i['MWh'] * i['price'] - i['OPEX']
 
-                    """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the policy makers, other EPs and the demand to do some calculations """
+                    """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the 
+                    policy makers, other EPs and the demand to do some calculations """
                     code = uuid.uuid4().int
                     """ this is to get a unique and random number """
                     j = i.copy()
-                    """ and we also have to create a copy of the i dictionary, if not things will update on that dictionary, and that's no good """
+                    """ and we also have to create a copy of the i dictionary, if not things will update on that 
+                    dictionary, and that's no good """
                     j.update({
                         'status': 'payment',
                         'sender': 'D',
@@ -1604,8 +1607,6 @@ def run_EP(env,
         #               4) insert plants into the mix               #
         #                                                           #
         #############################################################
-
-        """ before anything, we have to make sure that the MW_dict of this period has the same MW as the last period """
 
         if len(portfolio_of_plants) > 0:
             for _ in portfolio_of_plants:
@@ -1681,6 +1682,7 @@ def run_EP(env,
                         'completion': j['building_time'] + 1 + env.now,
                         'retirement': j['lifetime'] + j['building_time'] + 1 + env.now
                     })
+                    print(name, 'found its project', j, 'financed at time', env.now)
 
                     """ moreover, if it is a molecule project,
                     the price is pre-fixed """
@@ -1691,15 +1693,15 @@ def run_EP(env,
                     # j.pop('receiver')
                     # j.pop('sender')
 
-                    portfolio_of_plants[_] = j
+                    portfolio_of_plants[_] = j.copy()
                     # print('portfolio_of_plants.update({_ : j})', _, j)
-                    capacity[i['source']] = capacity[i['source']] + i['capacity']
+                    # capacity[i['source']] = capacity[i['source']] + i['capacity']
 
                     """ if the financed project was in the pool of projects of the EP, we have to take it out """
-                    if _ in portfolio_of_projects:
-                        portfolio_of_projects.pop(_)
+                    """if _ in portfolio_of_projects:
+                        portfolio_of_projects.pop(_)"""
 
-                        """ now we ready the contract that tells the TP that he got a new project"""
+                    """ now we ready the contract that tells the TP that he got a new project"""
                     code = uuid.uuid4().int
                     CONTRACTS[env.now].update({
                         code: {'sender': name,
@@ -1710,23 +1712,22 @@ def run_EP(env,
                                'MWh': i['MWh']
                                }
                     })
-                elif (i['guarantee'] == True or i['auction_contracted'] == True) and i['receiver'] == name and i[
-                    'status'] == 'project' and 'failed_attempts' not in i:
-                    """ if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to 
-                    be be inserrted into the portfolio_of_projects dictionary """
+                    """elif (i['guarantee'] == True or i['auction_contracted'] == True) and i['receiver'] == name and i['status'] == 'project' and 'failed_attempts' not in i:
+                    # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be 
+                    # inserrted into the portfolio_of_projects dictionary
                     j = i.copy()
                     j.update({'code': _})
                     if 'limit' not in j:
-                        """ if the key 'limit' is not in j, then we insert it, as well as the list failed_attempts, in 
-                        which we put the name of the banks that rejected the project"""
-                        j['limit'], j['failed_attempts'] = env.now + tolerance, [i['receiver']]
-                    portfolio_of_projects.update({_: j})
+                        #if the key 'limit' is not in j, then we insert it, as well as the list failed_attempts, in 
+                        # which we put the name of the banks that rejected the project
+                        j['limit'], j['failed_attempts'] = env.now + _tolerance, [i['receiver']]
+                    portfolio_of_projects.update({_: j})"""
                 elif i['sender'] == name and i['status'] == 'rejected' and i['CAPEX'] <= wallet:
                     j = i.copy()
                     """ if no one accepts to finance and the EP has enough money, it can pay for the plant itself"""
                     wallet -= j['CAPEX']
-                    if _ in portfolio_of_projects:
-                        portfolio_of_projects.pop(j['code'])
+                    """if _ in portfolio_of_projects:
+                        portfolio_of_projects.pop(j['code'])"""
                     code = uuid.uuid4().int
                     last_acquisition_period = env.now
                     k = i.copy()
@@ -1756,17 +1757,16 @@ def run_EP(env,
                              'MWh': k['MWh']
                              }
                     })
-                elif _ in portfolio_of_projects and i['sender'] == name and i[
+                """elif _ in portfolio_of_projects and i['sender'] == name and i[
                     'status'] == 'rejected' and i['limit'] > env.now and i['CAPEX'] > wallet:
-                    """ if not, then we take that project from the pool"""
+                    # if not, then we take that project from the pool
                     portfolio_of_projects.pop(i)
                 elif _ in portfolio_of_projects and i['sender'] == name and i['status'] == 'rejected' and i[
                     'limit'] < env.now:
                     portfolio_of_projects[i['code']].update({
                         'failed_attempts': i['failed_attempts'].append(
                             i['receiver']
-                        )
-                    })
+                        )})"""
 
         #############################################################
         #                                                           #
@@ -1774,7 +1774,7 @@ def run_EP(env,
         #                                                           #
         #############################################################
 
-        if env.now % periodicity == 0 and env.now > 1 + periodicity and value > 0 and wallet > 0:
+        if env.now % periodicity == 0 and env.now > 1 + periodicity and value > 0: # and wallet > 0:
             TP = {'TP': 0,
                   'NPV': False,
                   'Lumps': 0,
@@ -1785,7 +1785,7 @@ def run_EP(env,
                 i = TECHNOLOGIC[env.now - 1][_]
                 if i['source'] == _source:
                     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
-                    Lumps = np.ceil((value * DEMAND[env.now]) / i['MW'])
+                    Lumps = np.ceil((value * DEMAND[env.now-1]) / i['MW'])
                     price = source_price[i['source']]
                     NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'],
                                             i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
@@ -1822,6 +1822,7 @@ def run_EP(env,
 
             # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the
             # whole project
+            ic(TP['TP'], name, _source) if TP['TP'] == 0 else None
             project = TECHNOLOGIC[env.now - 1][TP['TP']].copy()
             # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
             project.update({
@@ -1837,13 +1838,16 @@ def run_EP(env,
                 'capacity': TP['Lumps'] * project['MW'],
                 'MWh': TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
                 'avoided_emissions': TECHNOLOGIC[env.now - 1][TP['TP']]['avoided_emissions'] * TP['Lumps'],
-                'emissions': TECHNOLOGIC[env.now - 1][TP['TP']]['emissions'] * TP['Lumps']})
-            if TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
+                'emissions': TECHNOLOGIC[env.now - 1][TP['TP']]['emissions'] * TP['Lumps'],
+                'guarantee': False
+            })
+            if _source in AUCTION_WANTED_SOURCES:
                 project.update(
                     {'status': 'bidded',
                      'receiver': 'EPM'})
             else:
                 project['status'] = 'project'
+                project['auction_contracted'] = False
             code = uuid.uuid4().int
             CONTRACTS[env.now][code] = project
 
@@ -1951,7 +1955,7 @@ def run_DD(env,
            initial_demand,
            when,
            increase):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.env
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.env
 
     while True:
 
@@ -1964,6 +1968,44 @@ def run_DD(env,
         #                Which plants will be contracted?               #
         #                                                               #
         #################################################################
+
+        if env.now == 0:
+            DEMAND.update({env.now: initial_demand})
+
+        elif env.now % when == 0:
+            """ first, we get how much green is E or M"""
+            """greeness = {'E': 0, 'M': 0}
+            total = 0
+            for month in range(env.now - when, env.now - 1):
+                if len(MIX[month]) > 1:
+                    for _ in MIX[month]:
+                        i = MIX[month][_]
+                        if i['status'] == 'contracted':
+                            if i['green'] is True:
+                                greeness.update({i['EorM']: greeness[i['EorM']] + i['MWh']})
+                            total += i['MWh']"""
+
+            """green = {'E': greeness['E'] / total, 'M': greeness['M'] / total}
+
+            expected_increase = (DEMAND[env.now - 1]['E'] + DEMAND[env.now - 1]['M']) * increase
+            pendulum_demand = specificities['EorM'] * expected_increase
+            prices = weighting_FF(env.now - 1, 'price', 'MWh', MIX, demand=True)
+            a = green_awareness
+            E_pendulum = a * (prices['E'] / sum(list(prices.values()))) + (1 - a) * green['E']
+            E_pendulum *= pendulum_demand
+            E_increase = DEMAND[env.now - 1]['E'] * specificities['increase'] + E_pendulum
+            M_pendulum = a * (prices['M'] / sum(list(prices.values()))) + (1 - a) * green['M']
+            M_pendulum *= pendulum_demand
+            M_increase = DEMAND[env.now - 1]['M'] * specificities['increase'] + M_pendulum"""
+
+            DEMAND.update({env.now: DEMAND[env.now-1] + increase})
+
+        else:
+            DEMAND.update({env.now: DEMAND[env.now-1]})
+            if len(MIX[env.now - 1]):
+                ic(MIX[env.now - 1])
+            if len(CONTRACTS[env.now - 1]):
+                ic(CONTRACTS[env.now - 1])
 
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
         if env.now > 0 and len(MIX[env.now]) > 0:
@@ -2003,38 +2045,6 @@ def run_DD(env,
                     MIX[env.now][i['code']].update({
                         'price': price})
 
-        if env.now == 0:
-            DEMAND.update({env.now: initial_demand})
-        else:
-            DEMAND.update({env.now: DEMAND[env.now-1]})
-
-        if env.now % when == 0 and env.now != 0:
-            """ first, we get how much green is E or M"""
-            """greeness = {'E': 0, 'M': 0}
-            total = 0
-            for month in range(env.now - when, env.now - 1):
-                if len(MIX[month]) > 1:
-                    for _ in MIX[month]:
-                        i = MIX[month][_]
-                        if i['status'] == 'contracted':
-                            if i['green'] is True:
-                                greeness.update({i['EorM']: greeness[i['EorM']] + i['MWh']})
-                            total += i['MWh']"""
-
-            """green = {'E': greeness['E'] / total, 'M': greeness['M'] / total}
-
-            expected_increase = (DEMAND[env.now - 1]['E'] + DEMAND[env.now - 1]['M']) * increase
-            pendulum_demand = specificities['EorM'] * expected_increase
-            prices = weighting_FF(env.now - 1, 'price', 'MWh', MIX, demand=True)
-            a = green_awareness
-            E_pendulum = a * (prices['E'] / sum(list(prices.values()))) + (1 - a) * green['E']
-            E_pendulum *= pendulum_demand
-            E_increase = DEMAND[env.now - 1]['E'] * specificities['increase'] + E_pendulum
-            M_pendulum = a * (prices['M'] / sum(list(prices.values()))) + (1 - a) * green['M']
-            M_pendulum *= pendulum_demand
-            M_increase = DEMAND[env.now - 1]['M'] * specificities['increase'] + M_pendulum"""
-
-            DEMAND.update({env.now: DEMAND + increase})
 
         yield env.timeout(1)
 

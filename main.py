@@ -13,8 +13,8 @@ if __name__ == '__main__':
     EP_2 = EP(env=env,
               name='EP_0',
               wallet=150000000,
-              portfolio_of_plants=[],
-              portfolio_of_projects=[],
+              portfolio_of_plants={},
+              portfolio_of_projects={},
               periodicity=6,
               tolerance=[12],
               last_acquisition_period=0,
@@ -30,8 +30,8 @@ if __name__ == '__main__':
     EP_1 = EP(env=env,
               name='EP_1',
               wallet=150000000,
-              portfolio_of_plants=[],
-              portfolio_of_projects=[],
+              portfolio_of_plants={},
+              portfolio_of_projects={},
               periodicity=6,
               tolerance=[12],
               last_acquisition_period=0,
@@ -45,7 +45,7 @@ if __name__ == '__main__':
               current_weight=[0.25])
 
     DBB = DBB(env=env,
-              wallet=20 * 10 ** 5,
+              wallet=20 * 10 ** 7,
               policy={'instrument': 'finance',
                       'source': 1},
               source=[{1: 1000}, {2: 500}, {0: 0}],
@@ -65,5 +65,6 @@ if __name__ == '__main__':
                 increase=INITIAL_DEMAND * 0.1)
 
     env.run(until=SIM_TIME)
+    print(MIX[SIM_TIME-1])
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

@@ -972,14 +972,18 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
     adressed_projects_NPVs = []
     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
 
-    interest_r = r * (1 + value) if genre == 'BB' else r * (
-            1 - value)  # if the agent is a private bank it increases the general interest rate by (1+risk), on the other hand, if the agent is the development bank it reduces the general interest rate by (1-effort)
+    interest_r = r * (1 + value) if genre == 'BB' else r * (1 - value)  # if the agent is a private bank it increases
+    # the general interest rate by (1+risk), on the other hand, if the agent is the development bank it reduces the
+    # general interest rate by (1-effort)
 
     car_ratio = capital_adequacy_rationing_FF(new_receivables, new_wallet)
 
-    if env.now > 0 and len(CONTRACTS.get(env.now - 1)) > 0 and car_ratio >= BASEL:
-        for _ in CONTRACTS.get(env.now - 1):
-            i = CONTRACTS.get(env.now - 1).get(_)
+    time = env.now - 1  # if genre == 'BB' else env.now -1  # The DBB looks at the present period
+
+    if env.now > 0 and len(CONTRACTS.get(time)) > 0 and car_ratio >= BASEL:
+        print('There are contract here')
+        for _ in CONTRACTS.get(time):
+            i = CONTRACTS.get(time).get(_).copy()
             """ the bank only appends that project if its adressed to it, is a project and it would accept to finance such source"""
             if i.get('receiver') == name and i.get('status') == 'project':
                 if genre == 'BB':
@@ -1005,16 +1009,17 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
         new_new_wallet = new_wallet - j.get('CAPEX')
         receiv_value = new_receivables.get(k) + j.get('CAPEX') * (
-                (interest_r) ** j.get('building_time')) if guaranteeing == False else new_receivables.get(k)
+                interest_r ** j.get('building_time')) if guaranteeing == False else new_receivables.get(k)
         new_new_receivables = new_receivables.copy()
         new_new_receivables.update({k: receiv_value})
         car_ratio = capital_adequacy_rationing_FF(new_new_receivables, new_new_wallet)
 
+        ic(env.now, name, RISKS[k], value, k, accepted_source, new_new_wallet, car_ratio)
         if (RISKS[k] < value or k == accepted_source) and new_new_wallet >= 0 and car_ratio >= BASEL:
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
             new_contract = j.copy()
-            if guaranteeing == False:
+            if guaranteeing == True:
                 new_contract.update({'sender': 'DBB',
                                      'receiver': j.get('sender'),
                                      'guarantee': True})
@@ -1026,9 +1031,10 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                     'status': 'financed',
                     'ammortisation': env.now + 1 + AMMORT,
                     'risk': value,
-                    'principal': j.get('CAPEX') * ((interest_r) ** j.get('building_time'))})
+                    'principal': j.get('CAPEX') * (interest_r ** j.get('building_time'))})
             CONTRACTS.get(env.now).update({i: new_contract})
-            # print(name, 'financed', new_contract)
+            print(name, 'financed', new_contract)
+            print()
         else:
             new_contract = j.copy()
             new_contract.update({'status': 'rejected'})
