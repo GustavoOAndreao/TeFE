@@ -10,7 +10,7 @@ if __name__ == '__main__':
     from commons import *
     from classes import *
 
-    EP_2 = EP(env=env,
+    EP_0 = EP(env=env,
               name='EP_0',
               wallet=150000000,
               portfolio_of_plants={},
@@ -42,6 +42,23 @@ if __name__ == '__main__':
               memory=[12],
               discount=[.01],
               past_weight=[0.5],
+              current_weight=[0.25])
+
+    EP_2 = EP(env=env,
+              name='EP_2',
+              wallet=150000000,
+              portfolio_of_plants={},
+              portfolio_of_projects={},
+              periodicity=6,
+              tolerance=[12],
+              last_acquisition_period=0,
+              source=[{2: 100}, {1: 50}, {0: 0}],
+              decision_var=0.75,
+              LSS_thresh=[1],
+              impatience=[12],
+              memory=[12],
+              discount=[.01],
+              past_weight=[1, 0.5],
               current_weight=[0.25])
 
     DBB = DBB(env=env,

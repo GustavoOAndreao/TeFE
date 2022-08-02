@@ -2022,7 +2022,7 @@ def run_DD(env,
             """ now, we sort the list of dictionaries in terms of dispatchability and then OPEX (respecting the merit order)"""
             possible_projects = sorted(possible_projects, key=lambda x: (x['dispatchable'], x['OPEX']))
             chosen = []
-            demand = DEMAND.copy()[env.now]
+            demand = DEMAND.copy()[env.now] * 24 * 30
             for plant in possible_projects:
                 if demand < 0:
                     """ if there is no more demand to be supplied, then the plant is not contracted"""

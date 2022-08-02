@@ -103,54 +103,60 @@ def finding_FF(complete_dictionary, what,
         cond_dict = {}
     whats, whos, completes = [], [], []
 
-    for _ in complete_dictionary:
-        i = complete_dictionary.get(_)
-        # first we must check if all conditions are good
-        if cond_dict != {}:
-            for cond_key in cond_dict:
-                condition = cond_dict.get(cond_key)
-                # we loop for each condition in order to check if they are true
-                if i.get(cond_key) == condition:
-                    conds_satisfied = True  # this matters more for the first, but it must be here
-                    continue  # this command returns to the loop if true
-                else:
-                    conds_satisfied = False
-                    break  # this gets us out of out loop
-        else:
-            conds_satisfied = True  # we have no conditions, all things must pass
+    if len(complete_dictionary) > 0:
+        for _ in complete_dictionary:
+            i = complete_dictionary.get(_)
+            # first we must check if all conditions are good
+            if cond_dict != {}:
+                for cond_key in cond_dict:
+                    condition = cond_dict.get(cond_key)
+                    # we loop for each condition in order to check if they are true
+                    if i.get(cond_key) == condition:
+                        conds_satisfied = True  # this matters more for the first, but it must be here
+                        continue  # this command returns to the loop if true
+                    else:
+                        conds_satisfied = False
+                        break  # this gets us out of out loop
+            else:
+                conds_satisfied = True  # we have no conditions, all things must pass
 
-        if not isinstance(what, dict) or isinstance(what, list):
-            if what in list(i.keys()) and conds_satisfied == True:
-                whats.append(i.get(what))
-                whos.append(i.get('name'))
-                completes.append(i)
-        else:
-            if isinstance(what, dict) and conds_satisfied == True:
-                key = list(what.keys())[0]
-                # ic(i.get(key).get(what.get(key)), i.get('name'))
-                whats.append(i.get(key).get(what.get(key)))
-                whos.append(i.get('name'))
-                completes.append(i)
+            if not isinstance(what, dict) or isinstance(what, list):
+                if what in list(i.keys()) and conds_satisfied == True:
+                    whats.append(i.get(what))
+                    whos.append(i.get('name'))
+                    completes.append(i)
+            else:
+                if isinstance(what, dict) and conds_satisfied == True:
+                    key = list(what.keys())[0]
+                    # ic(i.get(key).get(what.get(key)), i.get('name'))
+                    whats.append(i.get(key).get(what.get(key)))
+                    whos.append(i.get('name'))
+                    completes.append(i)
 
     if len(whats) == 0:
         # nothing was got, so we must put whats as zero and assign nothing
         whats = [0]
         whos = ['No one']
         completes = ['Nothing']
-
-    if how == 'highest':
-        idx = whats.index(max(whats))
-
-    elif how == 'lowest':
-        idx = whats.index(min(whats))
-
-    elif how == 'median':
-        idx = whats.index(median(whats))
-
-    elif how == 'sum':
-        whats = [sum(whats)]
-        whos = ['twas a sum']
         idx = 0
+
+    else:
+
+        if how == 'highest':
+            idx = whats.index(max(whats))
+
+        elif how == 'lowest':
+            idx = whats.index(min(whats))
+
+        elif how == 'median':
+            chosen = sorted(whats, reverse=True)[int(len(whats)//2)] if len(whats) % 2 else median(whats)
+            ic(chosen, whats, whos)
+            idx = whats.index(chosen) if (isinstance(chosen, int) and chosen in whats) is True else whats.index(int(chosen))
+
+        elif how == 'sum':
+            whats = [sum(whats)]
+            whos = ['twas a sum']
+            idx = 0
 
     return {'name': whos[idx],
             'value': whats[idx],
@@ -447,8 +453,10 @@ def indexing_FF(name):
             if plant['EP'] == name:
                 index[plant['source']] += plant['MWh'] * plant['price'] - plant['OPEX']
 
-        for source in list(index.keys()):
-            index[source] = index[source] / sum(index.values())
+        if sum(index.values())>0:
+            # check if the agent has any plants at all
+            for source in list(index.keys()):
+                index[source] = index[source] / sum(index.values())
 
     """for source in index:
         index[source] *= (1 - agent['dd_discount']['current'])
@@ -686,7 +694,7 @@ def private_deciding_FF(name):
         end = env.now + memory  # we have to search unsimulated periods to get zero results and keep the ratio
     else:
         start = env.now - 1 - memory
-        end = env.now
+        end = env.now -1
 
     genre = AGENTS[env.now - 1][name]["genre"]
 
