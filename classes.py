@@ -18,6 +18,8 @@ from collections import Counter
 
 from commons import *
 import config
+from config import seed
+random.seed(seed)
 
 
 def run_TP(name,
@@ -1560,7 +1562,7 @@ def run_EP(env,
         _current_weight = current_weight[0] if env.now == 0 else AGENTS[env.now-1][name]['current_weight'][0]
         _tolerance = tolerance[0] if env.now == 0 else AGENTS[env.now-1][name]['tolerance'][0]
         index = {0: 0, 1: 0, 2: 0} if env.now == 0 else indexing_FF(name)
-        value = decision_var
+        value = random.normalvariate(decision_var,1)
         profits = 0  # in order to get the profits of this period alone
 
         #############################################################
@@ -1822,7 +1824,7 @@ def run_EP(env,
 
             # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the
             # whole project
-            ic(TP['TP'], name, _source) if TP['TP'] == 0 else None
+            #ic(TP['TP'], name, _source) if TP['TP'] == 0 else None
             project = TECHNOLOGIC[env.now - 1][TP['TP']].copy()
             # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
             project.update({
@@ -2002,10 +2004,6 @@ def run_DD(env,
 
         else:
             DEMAND.update({env.now: DEMAND[env.now-1]})
-            if len(MIX[env.now - 1]):
-                ic(MIX[env.now - 1])
-            if len(CONTRACTS[env.now - 1]):
-                ic(CONTRACTS[env.now - 1])
 
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
         if env.now > 0 and len(MIX[env.now]) > 0:

@@ -6,18 +6,17 @@
 
 # check before importing
 
-import random
-
 import simpy
+# from __main__ import env
 
 # !pip install simpy #on colab it must be this pip install thing, dunno why
 
 blem = [10]  # example value
 
 SIM_TIME = 12 * 30
-random.seed(1)
 STARTING_TIME = 0
-env = simpy.Environment(initial_time=STARTING_TIME)
+env = None
+seed = None
 EP_NAME_LIST = []
 TP_NAME_LIST = []
 BB_NAME_LIST = []

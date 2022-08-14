@@ -4,6 +4,8 @@ import numpy as np
 from statistics import median
 import config
 from icecream import ic
+from config import seed
+random.seed(seed)
 
 
 def bla():
@@ -128,7 +130,7 @@ def finding_FF(complete_dictionary, what,
             else:
                 if isinstance(what, dict) and conds_satisfied == True:
                     key = list(what.keys())[0]
-                    # ic(i.get(key).get(what.get(key)), i.get('name'))
+                    #ic(i.get(key).get(what.get(key)), i.get('name'))
                     whats.append(i.get(key).get(what.get(key)))
                     whos.append(i.get('name'))
                     completes.append(i)
@@ -150,8 +152,8 @@ def finding_FF(complete_dictionary, what,
 
         elif how == 'median':
             chosen = sorted(whats, reverse=True)[int(len(whats)//2)] if len(whats) % 2 else median(whats)
-            ic(chosen, whats, whos)
-            idx = whats.index(chosen) if (isinstance(chosen, int) and chosen in whats) is True else whats.index(int(chosen))
+            #ic(chosen, whats, whos)
+            idx = whats.index(chosen)  # if (isinstance(chosen, int) and chosen in whats) is True else whats.index(int(chosen))
 
         elif how == 'sum':
             whats = [sum(whats)]
@@ -594,27 +596,28 @@ def evaluating_FF(name, add=None, change=None):
     else:
         # we are dealing with private agents
         for period in range(max(0, env.now - 1 - memory), env.now):
-            profit = (AGENTS[period][name]['profits'] * (1 - discount) ** (env.now - 1 - period))
-            present += profit / memory
-            hist += profit / env.now
-    if (present or hist) == 0:
-        ratio = 0  # this is to avoid division by zero
+            profit = AGENTS[period][name]['profits'] * ((1 - discount) ** (env.now - period))
+            hist += profit / memory
+        present += AGENTS[env.now-1][name]['profits']
+
+    if present > ((1 + LSS_thresh) * hist):
+        # current is better than hist, so now we run the distribution
+        verdict = 'add' if add[genre] == True else 'keep'
+        ratio = hist/present
+    elif present < (1 - LSS_thresh) * hist:
+        # current is better than hist, so now we run the distribution
+        verdict = 'change' if change[genre] == True else 'keep'
+        ratio = present/hist
     else:
-        ratio = min(present / hist, hist / present)  # to ensure that we get the percentage below 100
+        ratio = 1
 
     for i in range(1, impatience):
         dist = random.uniform(0, 1)
 
         if dist > ratio:
-            strikes = True
+            strikes = True if verdict in ['add', 'keep'] else False
+            ic(ratio, dist, present, hist, name, env.now)
             break
-
-    if present > ((1 + LSS_thresh) * hist):
-        # current is better than hist, so now we run the distribution
-        verdict = 'add' if add[genre] == True else 'keep'
-    elif present < (1 - LSS_thresh) * hist:
-        # current is better than hist, so now we run the distribution
-        verdict = 'change' if change[genre] == True else 'keep'
 
     return {'verdict': verdict, 'strikes': strikes}
 
@@ -674,7 +677,7 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
 
     elif verdict == 'add':
 
-        AGENTS[env.now][name]['impatience'][0] += 1
+        AGENTS[env.now][name]['impatience'][0] -= 1
 
     return
 
@@ -1022,7 +1025,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         new_new_receivables.update({k: receiv_value})
         car_ratio = capital_adequacy_rationing_FF(new_new_receivables, new_new_wallet)
 
-        ic(env.now, name, RISKS[k], value, k, accepted_source, new_new_wallet, car_ratio)
+        #ic(env.now, name, RISKS[k], value, k, accepted_source, new_new_wallet, car_ratio)
         if (RISKS[k] < value or k == accepted_source) and new_new_wallet >= 0 and car_ratio >= BASEL:
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
