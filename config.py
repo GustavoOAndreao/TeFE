@@ -14,7 +14,7 @@ import simpy
 blem = [10]  # example value
 
 SIM_TIME = 12 * 30
-STARTING_TIME = 0
+STARTING_TIME = None
 env = None
 seed = None
 EP_NAME_LIST = []

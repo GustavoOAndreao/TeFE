@@ -998,6 +998,7 @@ class DBB(object):
         self.financing_index = {0: 0, 1: 0, 2: 0}
         self.receivable = {0: 0, 1: 0, 2: 0}
         self.car_ratio = 0
+        self.LSS_tot = 0
         # self.subgenre = 'DBB'
         # self.dd_qual_vars = dd_qual_vars
         # self.dd_policy = dd_policy
@@ -1041,7 +1042,8 @@ class DBB(object):
             self.financing_index,
             self.receivable,
             self.car_ratio,
-            self.strikables_dict))
+            self.strikables_dict,
+            self.LSS_tot))
 
 
 def run_DBB(NPV_THRESHOLD_DBB,
@@ -1065,7 +1067,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
             financing_index,
             receivable,
             car_ratio,
-            strikables_dict):
+            strikables_dict,
+            LSS_tot):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.AGENTS_r, config.env  # globals
 
     while True:
@@ -1230,7 +1233,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
                 "receivable": receivable,
                 "car_ratio": car_ratio,
                 "strikables_dict": strikables_dict,
-                "current_state": current_stating_FF(_rationale)
+                "current_state": current_stating_FF(_rationale),
+                "LSS_tot": LSS_tot
             }
 
         AGENTS[env.now][name] = update.copy()
@@ -1496,6 +1500,8 @@ class EP(object):
 
         self.profits = 0
 
+        self.LSS_tot = 0
+
         self.action = env.process(run_EP(self.env,
                                          self.genre,
                                          self.name,
@@ -1517,7 +1523,8 @@ class EP(object):
                                          self.strikables_dict,
                                          self.verdict,
                                          self.profits,
-                                         self.dd_profits))
+                                         self.dd_profits,
+                                         self.LSS_tot))
 
 
 def run_EP(env,
@@ -1541,7 +1548,8 @@ def run_EP(env,
            strikables_dict,
            verdict,
            profits,
-           dd_profits):
+           dd_profits,
+           LSS_tot):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.AGENTS_r, config.env
 
     while True:
@@ -1924,7 +1932,8 @@ def run_EP(env,
                  "strikables_dict": strikables_dict,
                  "verdict": verdict,
                  "profits": profits,
-                 "dd_profits": dd_profits
+                 "dd_profits": dd_profits,
+                 "LSS_tot": LSS_tot
                  }
 
         AGENTS[env.now][name] = update.copy()
@@ -1973,6 +1982,8 @@ def run_DD(env,
 
         if env.now == 0:
             DEMAND.update({env.now: initial_demand})
+            printable = 'initial seed is ' + str(config.seed)
+            print(printable)
 
         elif env.now % when == 0:
             """ first, we get how much green is E or M"""

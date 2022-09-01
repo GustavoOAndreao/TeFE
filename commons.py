@@ -669,6 +669,8 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
         print(name, 'changed', striked, 'from', AGENTS[env.now - 1][name][striked][0], 'to', chosen_entry,
               'at', env.now, 'period')
 
+        AGENTS[env.now][name]["LSS_tot"] += 1
+
     # updated the list
 
     elif verdict == 'change':
