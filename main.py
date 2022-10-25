@@ -41,14 +41,15 @@ def run_sim(seed):
 
 if __name__ == '__main__':
 
-    RUN_TIMES = 10
+    RUN_TIMES = 100
     for seed in range(0, RUN_TIMES+1):
         start = timeit.default_timer() if seed == 0 else None
         run_sim(seed)
         stop = timeit.default_timer() if seed == 0 else None
-        printable = 'SEED IS ' + str(seed) + " AND THIS IS RUN " + str(seed) + " OF " + str(RUN_TIMES)
-        print(printable)
-        print(" AND IT WILL TAKE ROUGHLY" + str(((stop - start)/60)*RUN_TIMES)) + ' MINUTES' if seed == 0 else None
+        printable_1 = 'SEED IS ' + str(seed) + " AND THIS IS RUN " + str(seed) + " OF " + str(RUN_TIMES)
+        print(printable_1)
+        printable_2 = " AND IT WILL TAKE ROUGHLY " + str(((stop - start)/60)*RUN_TIMES) + ' MINUTES' if seed == 0 else None
+        print(printable_2) if seed == 0 else None
 
 
 
