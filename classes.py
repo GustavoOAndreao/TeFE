@@ -95,6 +95,18 @@ class TP(object):
         self.strategy = strategy
         self.LSS_tot = 0
         self.innovation_index = 0
+        self.shareholder_money = 0
+        self.true_innovation_index = 0
+
+        strikables_dict = {'impatience': impatience,
+                           'LSS_thresh': LSS_thresh,
+                           'memory': memory,
+                           'discount': discount,
+                           'strategy': strategy,
+                           'current_weight': current_weight
+                           }
+
+        self.strikables_dict = strikable_dicting(strikables_dict)
 
         self.action = env.process(run_TP(
             self.name,
@@ -118,7 +130,10 @@ class TP(object):
             self.discount,
             self.strategy,
             self.LSS_tot,
-            self.innovation_index
+            self.innovation_index,
+            self.shareholder_money,
+            self.true_innovation_index,
+            self.strikables_dict
         ))
 
 
@@ -143,7 +158,10 @@ def run_TP(name,
            discount,
            strategy,
            LSS_tot,
-           innovation_index):
+           innovation_index,
+           shareholder_money,
+           true_innovation_index,
+           strikables_dict):
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env  # globals
 
     while True:
@@ -156,7 +174,6 @@ def run_TP(name,
         #################################################################
 
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
-        _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
         _memory = memory[0] if env.now == 0 else AGENTS[env.now - 1][name]['memory'][0]
         _discount = discount[0] if env.now == 0 else AGENTS[env.now - 1][name]['discount'][0]
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
@@ -178,23 +195,6 @@ def run_TP(name,
                 if i['receiver'] == name and i['status'] == 'payment':
                     wallet += i['value']
                     profits += i['value']
-                    """ we also have to update the sales_MWh entry, to indicate to the policy makers how much MWh
-                     of each source is there  """
-                    j = dd_profits
-                    j.update({source: j[source] + i['value']})
-
-        #################################################################
-        #                                                               #
-        #    Now, on to check if change is on and if there is a strike  #
-        #                                                               #
-        #################################################################
-
-        if env.now > 0 and (verdict == 'add' or 'change'):
-            striked = striking_FF(list_of_strikables, kappa)
-
-            for entry in range(0, len(list_of_strikables)):
-                list_of_strikables[entry] = striked[entry]
-            verdict = 'keep'  # we already changed, now back to business
 
         #################################################################
         #                                                               #
@@ -207,6 +207,18 @@ def run_TP(name,
                 i = CONTRACTS[env.now - 1][_]
                 if i['receiver'] == name and i['sender'] == 'TPM':
                     wallet += i['value']
+
+        #################################################################
+        #                                                               #
+        # If it is the end of the year, then the TP shares its profits  #
+        #                     with its shareholders                     #
+        #                                                               #
+        #################################################################
+
+        if env.now % 12 == 0 and env.now > 0:
+            profits_to_shareholders = wallet*(1-value)
+            wallet -= profits_to_shareholders
+            shareholder_money += profits_to_shareholders
 
         #################################################################
         #                                                               #
@@ -270,6 +282,7 @@ def run_TP(name,
 
             if a >= 1:
                 """ we are dealing with innovation """
+                true_innovation_index += a
                 RnD_threshold *= rNd_INCREASE * a
                 """ we have to check where did the innovation occur"""
                 what_on = random.choice(['base_CAPEX', 'OPEX', 'MW'])
@@ -340,26 +353,30 @@ def run_TP(name,
         #                                                           #
         #############################################################
         update = {"name": name,
+                  "genre": genre,
                   "wallet": wallet,
                   "capacity": capacity,
                   "Technology": Technology,
+                  "profits": profits,
                   "RnD_threshold": RnD_threshold,
+                  "RandD": RandD,
                   "capacity_threshold": capacity_threshold,
                   "decision_var": decision_var,
                   "cap_conditions": cap_conditions,
                   "verdict": verdict,
+                  "self_NPV": self_NPV,
                   "capped": capped,
                   "impatience": impatience,
                   "current_weight": current_weight,
                   "LSS_thresh": LSS_thresh,
-                  "memory": _memory,
+                  "memory": memory,
+                  "discount": discount,
+                  "strategy": strategy,
                   "innovation_index": innovation_index,
-                  "innovation_de_facto": a,
-                  "discount": _discount,
-                  "strategy": _strategy,
+                  "shareholder_money": shareholder_money,
+                  "true_innovation_index": true_innovation_index,
                   "LSS_tot": LSS_tot,
-                  "Delta_LSS_1": (LSS_tot - AGENTS[env.now][name]['LSS_tot']) / AGENTS[env.now][name]['LSS_tot'] if
-                  AGENTS[env.now][name]['LSS_tot'] > 0 else 0
+                  "Delta_LSS_1": (LSS_tot - AGENTS[env.now-1][name]['LSS_tot']) / AGENTS[env.now-1][name]['LSS_tot'] if AGENTS[env.now-1][name]['LSS_tot'] > 0 else 0
                   }
 
         AGENTS[env.now][name] = update.copy()
@@ -370,80 +387,77 @@ def run_TP(name,
 
 
 class TPM(object):
-    def __init__(self, env, wallet, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time,
-                 dd_discount, dd_policy, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale, dd_SorT):
+    def __init__(self, env, wallet, instrument, source, decision_var, LSS_thresh, impatience, disclosed_thresh, past_weight, memory, discount, policies, rationale):
         self.env = env
         self.genre = 'TPM'
         self.subgenre = 'TPM'
         self.name = 'TPM'
         self.wallet = wallet
-        self.dd_policy = dd_policy
-        self.dd_source = dd_source
+        self.instrument = instrument
+        self.source = source
         self.decision_var = decision_var
         self.disclosed_var = decision_var
         self.verdict = 'keep'
-        self.dd_kappas = dd_kappas
-        self.dd_qual_vars = dd_qual_vars
-        self.dd_backwardness = dd_backwardness
-        self.dd_avg_time = dd_avg_time
-        self.dd_discount = dd_discount
+        self.LSS_thresh = LSS_thresh
+        self.impatience = impatience
+        self.disclosed_thresh = disclosed_thresh
+        self.past_weight = past_weight
+        self.memory = memory
+        self.discount = discount
         self.policies = policies
-        self.dd_index = dd_index
-        self.index_per_source = {1: 0, 2: 0, 4: 0, 5: 0}
-        self.dd_eta = dd_eta
-        self.dd_ambition = dd_ambition
-        self.dd_target = dd_target
-        self.dd_rationale = dd_rationale
-        self.dd_SorT = dd_SorT
+        self.rationale = rationale
+
+        strikables_dict = {'impatience': impatience,
+                           'LSS_thresh': LSS_thresh,
+                           'memory': memory,
+                           'discount': discount,
+                           "source": source,
+                           "disclosed_thresh": disclosed_thresh,
+                           "past_weight": past_weight,
+                           'instrument': instrument
+                           }
+
+        self.strikables_dict = strikable_dicting(strikables_dict)
 
         self.action = env.process(run_TPM(self.genre,
                                           self.subgenre,
                                           self.name,
                                           self.wallet,
-                                          self.dd_policy,
-                                          self.dd_source,
+                                          self.instrument,
+                                          self.source,
                                           self.decision_var,
                                           self.disclosed_var,
                                           self.verdict,
-                                          self.dd_kappas,
-                                          self.dd_qual_vars,
-                                          self.dd_backwardness,
-                                          self.dd_avg_time,
-                                          self.dd_discount,
-                                          self.dd_policy,
+                                          self.LSS_thresh,
+                                          self.impatience,
+                                          self.disclosed_thresh,
+                                          self.past_weight,
+                                          self.memory,
+                                          self.discount,
                                           self.policies,
-                                          self.dd_index,
-                                          self.index_per_source,
-                                          self.dd_eta,
-                                          self.dd_ambition,
-                                          self.dd_target,
-                                          self.dd_rationale,
-                                          self.dd_SorT))
+                                          self.rationale,
+                                          self.strikables_dict))
 
 
 def run_TPM(genre,
             subgenre,
             name,
             wallet,
-            dd_policy,
-            dd_source,
+            instrument,
+            source,
             decision_var,
             disclosed_var,
             verdict,
-            dd_kappas,
-            dd_qual_vars,
-            dd_backwardness,
-            dd_avg_time,
-            dd_discount,
+            LSS_thresh,
+            impatience,
+            disclosed_thresh,
+            past_weight,
+            memory,
+            discount,
             policies,
-            dd_index,
-            index_per_source,
-            dd_eta,
-            dd_ambition,
-            dd_target,
-            dd_rationale,
-            dd_SorT):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, AMMORT, TACTIC_DISCOUNT, INSTRUMENT_TO_SOURCE_DICT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.AMMORT, config.TACTIC_DISCOUNT, config.INSTRUMENT_TO_SOURCE_DICT, config.env
+            rationale,
+            strikables_dict):
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, AMMORT, INSTRUMENT_TO_SOURCE_DICT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.AMMORT, config.INSTRUMENT_TO_SOURCE_DICT, config.env
 
     while True:
 
@@ -454,38 +468,15 @@ def run_TPM(genre,
         #                                                               #
         #################################################################
 
-        list_of_strikables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time,
-                              dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
-
-        policy = dd_policy['current']
-        source = dd_source['current']
-        kappa = dd_kappas['current']
-        backwardness = dd_backwardness['current']
-        avg_time = dd_avg_time['current']
-        discount = dd_discount['current']
-        index = indexing_FF('TPM') if env.now > 0 else dd_index['current']
-        eta_acc = dd_eta['current']
-        ambition = dd_ambition['current']
-        rationale = dd_rationale['current']
+        _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
+        _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
+        _source = list(source[0].keys())[0] if env.now == 0 else list(AGENTS[env.now - 1][name]['source'][0].keys())[0]
+        _memory = memory[0] if env.now == 0 else AGENTS[env.now - 1][name]['memory'][0]
+        _discount = discount[0] if env.now == 0 else AGENTS[env.now - 1][name]['discount'][0]
+        _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
+        _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
+        _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
         value = disclosed_var
-
-        if env.now > 0 and (verdict == 'add' or 'change'):
-            striked = striking_FF(list_of_strikables, kappa)  # with this we have a different list of strikables
-
-            for entry in range(0, len(list_of_strikables)):
-
-                if list_of_strikables[entry]['current'] == striked[entry]:
-                    # that dictionary was not the changed one, so we can just update it
-                    list_of_strikables[entry] = striked[entry]
-
-                else:
-                    # alright, that was the one that changed
-
-                    policies = policymaking_FF(striked[entry], policies,
-                                               disclosed_var) if verdict == 'change' else policymaking_FF(
-                        striked[entry], policies, disclosed_var, add=True)
-
-            verdict = 'keep'  # we already changed, now back to business
 
         #################################################################
         #                                                               #
@@ -493,24 +484,27 @@ def run_TPM(genre,
         #                                                               #
         #################################################################
 
-        policy_pool = []
-        policy_pool.append(policy)
-        policy_pool.append(
-            policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
+        policy_pool = [{'instrument': instrument,
+                        'source': _source,
+                        'budget': value * wallet}]
+
+        if len(policies) > 0:
+            policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwards
+            # all the other policies
 
         if env.now >= 2:
             for entry in policy_pool:
                 instrument = entry['instrument']
-                source = entry['source']
-                budget = entry['budget'] if 'budget' in entry else value * wallet
-                value = disclosed_var if 'value' not in entry else entry['value']
+                chosen_source = entry['source']
+                budget = entry['budget']
+                value = disclosed_var
 
                 if instrument == 'supply':
 
                     firms = []
                     for _ in AGENTS[env.now - 1]:
                         i = AGENTS[env.now - 1][_]
-                        if i['genre'] == 'TP' and (i['source'] in INSTRUMENT_TO_SOURCE_DICT[source]):
+                        if i['genre'] == 'TP' and (i['source'] == chosen_source):
                             firms.append(_)
 
                     if len(firms) > 0:
@@ -534,34 +528,23 @@ def run_TPM(genre,
                     """
                     print('TBD')
 
-            """ and now back to the actual variables for the current policy"""
-            instrument = policy_pool[0]['instrument']
-            source = policy_pool[0]['source']
             value = disclosed_var
 
-        #################################################################
-        #                                                               #
-        #    Now, the TPM analyses what happened to the system due to   #
-        #                       its intervention                        #
-        #                                                               #
-        #################################################################
-
-        add_source = source_reporting_FF(name)
-
-        for entry in dd_source['ranks']:
-            dd_source['ranks'][entry] *= (1 - discount)
-            dd_source['ranks'][entry] += add_source[entry]
+        if env.now > 2:
+            add_source = source_reporting_FF(name, _past_weight)
+            for entry in range(len(source) - 1):
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+                source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
         #################################################################
         #                                                               #
-        #         And then, the TPM will decide what to do next         #
+        #         And then, the DBB will decide what to do next         #
         #                                                               #
         #################################################################
 
         if env.now > 0:
             decision_var = max(0, min(1, public_deciding_FF(name)))
-            disclosed_var = thresholding_FF(kappa, disclosed_var, decision_var)
-
+            disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
             decisions = evaluating_FF(name)
 
         #################################################################
@@ -570,41 +553,30 @@ def run_TPM(genre,
         #                                                               #
         #################################################################
 
-        AGENTS[env.now].update({
-            name: {
-                "genre": genre,
-                "subgenre": subgenre,
-                "name": name,
-                "wallet": wallet,
-                "dd_policy": dd_policy,
-                "dd_source": dd_source,
-                "decision_var": decision_var,
-                "disclosed_var": disclosed_var,
-                "verdict": verdict,
-                "dd_kappas": dd_kappas,
-                "dd_qual_vars": dd_qual_vars,
-                "dd_backwardness": dd_backwardness,
-                "dd_avg_time": dd_avg_time,
-                "dd_discount": dd_discount,
-                "policies": policies,
-                "dd_index": dd_index,
-                "index_per_source": index_per_source,
-                "dd_eta": dd_eta,
-                "dd_ambition": dd_ambition,
-                "dd_target": dd_target,
-                "dd_rationale": dd_rationale,
-                "policy": policy,
-                "source": source,
-                "kappa": kappa,
-                "backwardness": backwardness,
-                "avg_time": avg_time,
-                "discount": discount,
-                "index": index,
-                "eta_acc": eta_acc,
-                "ambition": ambition,
-                "rationale": rationale,
-                "value": value,
-            }})
+        update = {
+            "genre": genre,
+            "subgenre": subgenre,
+            "name": name,
+            "wallet": wallet,
+            "instrument": instrument,
+            "source": source,
+            "decision_var": decision_var,
+            "disclosed_var": disclosed_var,
+            "verdict": verdict,
+            "LSS_thresh": LSS_thresh,
+            "impatience": impatience,
+            "disclosed_thresh": disclosed_thresh,
+            "past_weight": past_weight,
+            "memory": memory,
+            "discount": discount,
+            "policies": policies,
+            "rationale": rationale,
+            "LSS_tot": LSS_tot,
+            "Delta_LSS_1": (LSS_tot - AGENTS[env.now - 1][name]['LSS_tot']) / AGENTS[env.now - 1][name]['LSS_tot'] if (
+                        env.now > 1 and AGENTS[env.now - 1][name]['LSS_tot'] > 0) else 0
+        }
+
+        AGENTS[env.now][name] = update.copy()
         if env.now > 0:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
@@ -782,10 +754,9 @@ def run_EPM(genre,
         #                                                               #
         #################################################################
 
-        policy_pool = []
-        policy_pool.append(policy)
-        policy_pool.append(
-            policies)  # with this we a temporary list with first the current policy and afterwars all the other policies
+        policy_pool = [{'instrument': instrument,
+                        'source': _source,
+                        'budget': value * wallet}]
 
         if env.now >= 2:
             for entry in policy_pool:
@@ -959,7 +930,7 @@ def run_EPM(genre,
 
 
 class DBB(object):
-    def __init__(self, env, wallet, policy, source, decision_var, LSS_thresh, past_weight,
+    def __init__(self, env, wallet, instrument, source, decision_var, LSS_thresh, past_weight,
                  memory, discount, policies, impatience, disclosed_thresh, rationale):
         # Pre-Q:
         # self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
@@ -973,7 +944,7 @@ class DBB(object):
         self.genre = 'DBB'
         self.name = 'DBB'
         self.wallet = wallet
-        self.policy = policy
+        self.instrument = instrument
         self.source = source
         self.decision_var = decision_var
         self.disclosed_var = decision_var
@@ -1006,7 +977,8 @@ class DBB(object):
                            'memory': memory,
                            'discount': discount,
                            'disclosed_thresh': disclosed_thresh,
-                           'rationale': rationale
+                           'rationale': rationale,
+                           'policy': policy
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
@@ -1017,7 +989,7 @@ class DBB(object):
             self.genre,
             self.name,
             self.wallet,
-            self.policy,
+            self.instrumentinstrument,
             self.source,
             self.decision_var,
             self.disclosed_var,
@@ -1042,7 +1014,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             genre,
             name,
             wallet,
-            policy,
+            instrument,
             source,
             decision_var,
             disclosed_var,
@@ -1078,6 +1050,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
         _discount = discount[0] if env.now == 0 else AGENTS[env.now - 1][name]['discount'][0]
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
         _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
+        _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
         value = disclosed_var
 
         #################################################################
@@ -1139,7 +1112,9 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-        policy_pool = [policy]
+        policy_pool = [{'instrument': instrument,
+                        'source': _source,
+                        'budget': value * wallet}]
 
         if len(policies) > 0:
             policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwards
@@ -1148,9 +1123,9 @@ def run_DBB(NPV_THRESHOLD_DBB,
         if env.now >= 2:
             for entry in policy_pool:
                 instrument = entry['instrument']
-                chosen_source = entry['source'] if 'source' in entry else _source
-                budget = entry['budget'] if 'budget' in entry else value * wallet
-                value = disclosed_var if 'value' not in entry else entry['value']
+                chosen_source = entry['source']
+                budget = entry['budget']
+                value = disclosed_var
 
                 if instrument == 'finance' and len(CONTRACTS[env.now - 1]) > 0:
                     financing = financing_FF(genre, name, wallet, receivable, value, financing_index,
@@ -1207,7 +1182,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "genre": genre,
             "name": name,
             "wallet": wallet,
-            "policy": policy,
+            "instrument": instrument,
             "source": source,
             "decision_var": decision_var,
             "disclosed_var": disclosed_var,
@@ -1226,8 +1201,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "strikables_dict": strikables_dict,
             "current_state": current_stating_FF(_rationale),
             "LSS_tot": LSS_tot,
-            "Delta_LSS_1": (LSS_tot - AGENTS[env.now][name]['LSS_tot']) / AGENTS[env.now][name]['LSS_tot'] if
-            AGENTS[env.now][name]['LSS_tot'] > 0 else 0
+            "Delta_LSS_1": (LSS_tot - AGENTS[env.now-1][name]['LSS_tot']) / AGENTS[env.now-1][name]['LSS_tot'] if (env.now > 1 and AGENTS[env.now-1][name]['LSS_tot'] > 0) else 0
         }
 
         AGENTS[env.now][name] = update.copy()
@@ -1263,6 +1237,7 @@ class BB(object):
         self.dd_discount = dd_discount  # discount factor. Is a ranked dictionary
         self.dd_strategies = dd_strategies  # initial strategy for the technology provider. Is a ranked dictionary
         self.dd_index = dd_index"""
+        self.shareholder_money = 0
 
         self.action = env.process(run_BB(self.financing_index,
                                          self.Portfolio,
@@ -1277,7 +1252,8 @@ class BB(object):
                                          self.dd_profits,
                                          self.dd_source,
                                          self.decision_var,
-                                         self.verdict
+                                         self.verdict,
+                                         self.shareholder_money
                                          ))
 
 
@@ -1301,7 +1277,8 @@ def run_BB(NPV_THRESHOLD_DBB,
            index_per_source,
            rationale,
            financing_index,
-           Portfolio):
+           Portfolio,
+           shareholder_money):
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, r, BASEL, AMMORT, TACTIC_DISCOUNT, NPV_THRESHOLD, RISKS, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.TACTIC_DISCOUNT, config.NPV_THRESHOLD, config.RISKS, config.env  # globals
 
     while True:
@@ -1342,6 +1319,18 @@ def run_BB(NPV_THRESHOLD_DBB,
                     dd_profits.update({
                         i['source']: dd_profits[i['source']] - i['value']
                     })
+
+        #################################################################
+        #                                                               #
+        # If it is the end of the year, then the BB shares its profits  #
+        #                     with its shareholders                     #
+        #                                                               #
+        #################################################################
+
+        if env.now % 12 == 0 and env.now > 0:
+            profits_to_shareholders = wallet * (1 - value)
+            wallet -= profits_to_shareholders
+            shareholder_money += profits_to_shareholders
 
         #################################################################
         #                                                               #
@@ -1494,6 +1483,7 @@ class EP(object):
         self.profits = 0
 
         self.LSS_tot = 0
+        self.shareholder_money = 0
 
         self.action = env.process(run_EP(self.env,
                                          self.genre,
@@ -1517,7 +1507,8 @@ class EP(object):
                                          self.verdict,
                                          self.profits,
                                          self.dd_profits,
-                                         self.LSS_tot))
+                                         self.LSS_tot,
+                                         self.shareholder_money))
 
 
 def run_EP(env,
@@ -1542,7 +1533,8 @@ def run_EP(env,
            verdict,
            profits,
            dd_profits,
-           LSS_tot):
+           LSS_tot,
+           shareholder_money):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.AGENTS_r, config.env
 
     while True:
@@ -1601,6 +1593,18 @@ def run_EP(env,
                     })
                     """ and now we update"""
                     CONTRACTS[env.now - 1][code] = j
+
+        #################################################################
+        #                                                               #
+        # If it is the end of the year, then the EP shares its profits  #
+        #                     with its shareholders                     #
+        #                                                               #
+        #################################################################
+
+        if env.now % 12 == 0 and env.now > 0:
+            profits_to_shareholders = wallet * (1 - value)
+            wallet -= profits_to_shareholders
+            shareholder_money += profits_to_shareholders
 
         #############################################################
         #                                                           #
@@ -1926,8 +1930,7 @@ def run_EP(env,
                   "profits": profits,
                   "dd_profits": dd_profits,
                   "LSS_tot": LSS_tot,
-                  "Delta_LSS_1": (LSS_tot - AGENTS[env.now][name]['LSS_tot']) / AGENTS[env.now][name]['LSS_tot'] if
-                  AGENTS[env.now][name]['LSS_tot'] > 0 else 0
+                  "Delta_LSS_1": ((LSS_tot - AGENTS[env.now-1][name]['LSS_tot']) / AGENTS[env.now-1][name]['LSS_tot']) if (env.now > 1 and AGENTS[env.now-1][name]['LSS_tot'] > 0) else 0
                   }
 
         AGENTS[env.now][name] = update.copy()

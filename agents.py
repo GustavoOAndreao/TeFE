@@ -61,11 +61,10 @@ EP_2 = EP(env=env,
 
 DBB = DBB(env=env,
           wallet=20 * 10 ** 7,
-          policy={'instrument': 'finance',
-                  'source': 1},
+          instrument=['lending', 'guarantee']
           source=[{1: 1000}, {2: 500}, {0: 0}],
           decision_var=0.5,
-          LSS_thresh=[.25, .5],
+          LSS_thresh=[.25, .5, .75],
           past_weight=[1],
           memory=[12],
           discount=[0.001],

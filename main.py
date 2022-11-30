@@ -41,7 +41,7 @@ def run_sim(seed):
 
 if __name__ == '__main__':
 
-    RUN_TIMES = 100
+    RUN_TIMES = 1
     for seed in range(0, RUN_TIMES+1):
         start = timeit.default_timer() if seed == 0 else None
         run_sim(seed)
