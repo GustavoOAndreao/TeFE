@@ -15,7 +15,7 @@ blem = [10]  # example value
 
 SIM_TIME = 12 * 30
 STARTING_TIME = None
-env = None
+env = simpy.Environment(initial_time=0)
 seed = None
 EP_NAME_LIST = []
 TP_NAME_LIST = []
@@ -33,41 +33,51 @@ POLICY_EXPIRATION_DATE = 12 * 10
 rNd_INCREASE = 0.5
 # M_CONTRACT_LIMIT = 2 * 12
 AUCTION_WANTED_SOURCES = []
-AMMORT = 20 * 12
+AMMORT = 25 * 12
 NPV_THRESHOLD = 0
 NPV_THRESHOLD_DBB = 0
-INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2]}
+INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 120: [0, 1, 2]}
 BASEL = 0.105
 MARGIN = .1
 INITIAL_DEMAND = 100
 STARTING_PRICE = 25
 RADICAL_THRESHOLD = 2
 RISKS = {0: 0, 1: 0, 2: 0}
+MIX_EXPANSION = INITIAL_DEMAND/max(1, len(EP_NAME_LIST))
+FUSS_PERIOD = 60
+INITIAL_RANDOMNESS = 0.2
+RANDOMNESS = INITIAL_RANDOMNESS
 
-THERMAL = {"CAPEX": 100000000,
-           'OPEX': 30000,
-           "MW": 100,
-           'CF': .7,
-           "lifetime": 25 * 12,
-           'building_time': 24}
+THERMAL = {
+    "CAPEX": 100000000,
+    'OPEX': 30000,
+    "MW": 100,
+    'CF': .7,
+    "lifetime": 25 * 12,
+    'building_time': 24
+}
 
 """
 For fixed technologies only, if using TPs comment it
 """
 
-WIND = {"CAPEX": 20000000,
-           'OPEX': 30000,
-           "MW": 20,
-           'CF': .29,
-           "lifetime": 25 * 12,
-           'building_time': 12}
+WIND = {
+    "CAPEX": 20000000,
+    'OPEX': 3000,
+    "MW": 20,
+    'CF': .29,
+    "lifetime": 30 * 12,
+    'building_time': 12
+}
 
-SOLAR = {"CAPEX": 10000,
-           'OPEX': 200,
-           "MW": 1,
-           'CF': .1,
-           "lifetime": 20 * 12,
-           'building_time': 6}
+SOLAR = {
+    "CAPEX": 10000,
+    'OPEX': 200,
+    "MW": 1,
+    'CF': .1,
+    "lifetime": 25 * 12,
+    'building_time': 6
+}
 
 for j in range(SIM_TIME):
     CONTRACTS.update({j: {}})
@@ -88,8 +98,9 @@ for j in range(SIM_TIME):
                                            'last_radical_innovation': 0,
                                            'last_marginal_innovation': 0,
                                            'emissions': 5000,
-                                           'avoided_emissions': 0},
-                            'TP_solar' : {'name': 'TP_solar',
+                                           'avoided_emissions': -5000}}
+                            })  # ,
+"""                            'TP_solar' : {'name': 'TP_solar',
                                           "green": True,
                                           "source": 2,
                                           "source_name": 'solar',
@@ -120,5 +131,6 @@ for j in range(SIM_TIME):
                                           'last_radical_innovation': 0,
                                           'last_marginal_innovation': 0,
                                           'emissions': 0,
-                                          'avoided_emissions': 250}}
-                            })
+                                          'avoided_emissions': 250}
+                            }
+                            }) """

@@ -187,9 +187,9 @@ def weighting_FF(time, var, weight, dictionary,
     STARTING_PRICE = config.STARTING_PRICE
     """ if we are dealing with an EP or TP, then we have to get only the prices for the sources of the same EorM as they """
     if EorM == False:
-        denominator = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0} if public == False else {1: 0, 2: 0, 4: 0, 5: 0}
+        denominator = {0: 0, 1: 0, 2: 0}  # {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0} if public == False else {1: 0, 2: 0, 4: 0, 5: 0}
     else:
-        denominator = {0: 0, 1: 0, 2: 0} if EorM == 'E' else {3: 0, 4: 0, 5: 0}
+        denominator = {0: 0, 1: 0, 2: 0}  # if EorM == 'E' else {3: 0, 4: 0, 5: 0}
     var_dict = denominator.copy()  ### WE HAVE TO USE COPY, if not, we always divide by itself and get 1...
 
     """ If time is a number, we need to make sure that the time loop only catches it once"""
@@ -226,6 +226,7 @@ def weighting_FF(time, var, weight, dictionary,
                             {i.get('source'): i.get(var) if i.get(var) < var_dict.get(i.get('source')) else None
                              })
         else:
+            print('EXCEPTION')
             # exceptions if there is no entry in the dictionary
             if (var, weight == 'price', 'MWh'):
                 if demand != True:
@@ -330,7 +331,8 @@ def private_reporting_FF(genre):
 
 def public_reporting_FF(rationale):
     """
-    Internal function called by source_reporting_FF. This is the reporting_FF, it reports both the backwards and forwards for public agents.
+    Internal function called by source_reporting_FF. This is the reporting_FF, it reports both the backwards and
+    forwards for public agents.
     :param rationale:
     :return:
     """
@@ -341,52 +343,57 @@ def public_reporting_FF(rationale):
     Sources = [0, 1, 2]
 
     for source in Sources:
-        backward_dict.update({source: 0})
+        backward_dict[source] = 0
     forward_dict = backward_dict.copy()
 
     """
     On to the forward_dict
     """
 
-    # if the rationale is innovation or internalization, the policy maker basically analyzes agents: on the backward_dict for what happened and on the forward_dict for what could've happend. For the what could've it basically analyzes what would be the effects if all profits were reinvested. For emissions it is a little more complicated: it needs to get the avoided emissions for the backwards and get the whole demand for electricity or molecules and look what would be the avoided emissions if the best technology in each source was used.
+    # if the rationale is innovation or internalization, the policy maker basically analyzes agents: on the
+    # backward_dict for what happened and on the forward_dict for what could've happend. For the what could've it
+    # basically analyzes what would be the effects if all profits were reinvested. For emissions it is a little more
+    # complicated: it needs to get the avoided emissions for the backwards and get the whole demand for electricity or
+    # molecules and look what would be the avoided emissions if the best technology in each source was used.
 
     if rationale == 'green':
         # the rationale is green, so we need to look at the avoided emissions
-        for TP in TECHNOLOGIC.get(env.now - 1):
+        for TP in TECHNOLOGIC[env.now - 1]:
             # we have the highest MW in order to compare things, the maximum price
-            technology = TECHNOLOGIC.get(env.now - 1).get(TP)
-            demand_now = DEMAND.get(env.now - 1)
+            technology = TECHNOLOGIC[env.now - 1][TP]
+            demand_now = DEMAND.get[env.now - 1]
             lumps = np.floor(demand_now / technology['MW'])
 
             avoided_emissions = technology['avoided'] * lumps
 
             if technology['source'] in Sources and avoided_emissions > forward_dict[technology['source']]:
-                forward_dict.update({technology['source']: avoided_emissions})
+                forward_dict[technology['source']] = avoided_emissions
 
-        for code in MIX.get(env.now - 1):
-            plant = MIX.get(env.now - 1)[code]
-            if 'status' == 'contracted':
-                # the plant was contracted at that period
-                current = plant['avoided']  # we now have the current avoided emissions of that plant
-                current += Sources[plant.get('source')]  # we now add to the current profits what we had
-                backward_dict.update({plant.get('source'): current})  # and update the backward_dict dictionary
+        if len(MIX[env.now - 1]) > 0:
+            for code in MIX[env.now - 1]:
+                plant = MIX[env.now - 1][code]
+                if 'status' == 'contracted':
+                    # the plant was contracted at that period
+                    current = plant['avoided']  # we now have the current avoided emissions of that plant
+                    # current += Sources[plant['source']]  # we now add to the current profits what we had
+                    backward_dict[plant['source']] += current  # and update the backward_dict dictionary
 
     else:
-        # the rationale is either internalization (capacity) or innovation (R&D), so we have to check the agents dictionary instead
-        for _ in AGENTS.get(env.now - 2):
-            agent = AGENTS.get(env.now - 2).get(_)
+        # the rationale is either internalization (capacity) or innovation (R&D), so we have to check the agents
+        # dictionary instead
+        for _ in AGENTS[env.now - 1]:
+            agent = AGENTS[env.now - 1][_]
 
-            if agent.get('genre') == 'TP':
-                profits = agent.get('profits')
-                var = agent.get('RandD') if rationale == 'innovation' else agent.get(
-                    'capacity')  # if the rationale is innovation we are looking into R&D, if not then the rationale is internalization and we are looking at the productive capacity
-                # we now sum the two, because it would mean what would happen if all profits were reinvested into R&D
-                """ and now to the backward_dict"""
-                agent = AGENTS.get(env.now - 1).get(
-                    _)  # we have to get the last information, we are looking at what actually happened
-                current = agent['RandD'] if rationale == 'innovation' else agent.get('capacity')
-                current += Sources[agent.get('source')]  # we now add to the current profits what we had
-                backward_dict.update({agent.get('source'): current})  # and update the backward_dict dictionary
+            if agent['genre'] == 'TP':
+                profits = agent['profits']
+                var = agent['RandD'] if rationale == 'innovation' else agent['capacity']  # if the rationale is
+                # innovation we are looking into R&D, if not then the rationale isinternalization and we are looking at
+                # the productive capacity we now sum the two, because it would mean what would happen if all profits
+                # were reinvested into R&D
+                backward_dict[agent['Technology']['source']] += var
+                forward_dict[agent['Technology']['source']] += profits + var
+
+        print(backward_dict, forward_dict)
 
     return {"backward_dict": backward_dict, "forward_dict": forward_dict}
 
@@ -405,13 +412,21 @@ def sourcing_FF(backward_dict, forward_dict, backwardness, index_dict=None):
     back, forw = backward_dict, forward_dict
     new_dd_source = {}
 
-    if index_dict is None:
-        index_dict = {0: 1, 1: 1, 2: 1}
+    # if index_dict is None:
+
+    index_dict = {0: 1, 1: 1, 2: 1}
+
+    back_std = np.std(list(backward_dict.values())) * config.RANDOMNESS
+    forw_std = np.std(list(forward_dict.values())) * config.RANDOMNESS
 
     for source in back:
-        new_dd_source.update({
-            source: index_dict[source] * (bwd * back[source] + (1 - bwd) * forw[source])
-        })
+
+        source_back = max(0, np.random.normal(back[source], back_std))
+        source_forw = max(0, np.random.normal(forw[source], forw_std))
+
+        ic(source, source_back, back[source], source_forw, forw[source])
+
+        new_dd_source[source] = index_dict[source] * (bwd * source_back + (1 - bwd) * source_forw)
 
     return new_dd_source
 
@@ -459,6 +474,10 @@ def indexing_FF(name):
             # check if the agent has any plants at all
             for source in list(index.keys()):
                 index[source] = index[source] / sum(index.values())
+
+    else:
+        denominator = 1/len(index)
+        index = {0: denominator, 1: denominator, 2: denominator}
 
     """for source in index:
         index[source] *= (1 - agent['dd_discount']['current'])
@@ -516,14 +535,14 @@ def thresholding_FF(threshold, disclosed_var, decision_var):
     return disclosed_var
 
 
-def from_time_to_agents_FF(dictionary):
-    """ This function gets the dictionaries that are created by time and arrange copys as other dictionaries reversed,
+"""def from_time_to_agents_FF(dictionary):"""
+"""     This function gets the dictionaries that are created by time and arrange copys as other dictionaries reversed,
      i.e., time by agents
 
     :param dictionary:
     :return:
     """
-    AGENTS, TECHNOLOGIC, AGENTS_r, TECHNOLOGIC_r, env = config.AGENTS, config.TECHNOLOGIC, config.AGENTS_r, config.TECHNOLOGIC_r, config.env
+"""AGENTS, TECHNOLOGIC, AGENTS_r, TECHNOLOGIC_r, env = config.AGENTS, config.TECHNOLOGIC, config.AGENTS_r, config.TECHNOLOGIC_r, config.env
 
     for _ in dictionary.get(env.now):
         i = dictionary.get(env.now).get(_).copy()
@@ -538,7 +557,7 @@ def from_time_to_agents_FF(dictionary):
 
         dictionary_r[_] = {env.now: i}
 
-    return
+    return"""
 
 
 def evaluating_FF(name, add=None, change=None):
@@ -565,6 +584,7 @@ def evaluating_FF(name, add=None, change=None):
                'TPM': False,
                'DBB': False}
     env, AGENTS = config.env, config.AGENTS
+    randomness = config.RANDOMNESS
 
     # first we have to get the information of the agent from the specififed dictionary
 
@@ -576,50 +596,69 @@ def evaluating_FF(name, add=None, change=None):
 
     verdict = 'keep'
     strikes = False
+    impatience_increase = 0
 
     # if there is more time than the memory, then the agents do things and we can look into things now
-    present, hist = 0, 0  # first we start these two numbers, they'll be used for the ratio
+    present, hist = 0, []  # first we start these two numbers, they'll be used for the ratio
     if genre in ['DBB', 'TPM', 'EPM']:
         # we are dealing with public agents
         # eta_acc = AGENTS_r[name][env.now - 1]['dd_eta']['current']
         # target = AGENTS_r[name][env.now - 1]['dd_target']['current']
-        current = AGENTS[env.now - 1][name]['current_state']
-        before = 0
+        present = AGENTS[env.now - 1][name]['current_state']
+        # before = 0
         start = max(0, env.now - 1 - memory)
         end = env.now
         for time in range(start, end):
-            current += AGENTS[time][name]['current_state'] / memory
+            hist.append(AGENTS[time][name]['current_state'])
         # increase = (current - before) / before
         # eta_exp = target / ((1 + increase) * current)
-        present = current
-        hist = before
     else:
         # we are dealing with private agents
         for period in range(max(0, env.now - 1 - memory), env.now):
-            profit = AGENTS[period][name]['profits'] * ((1 - discount) ** (env.now - period))
-            hist += profit / memory
+            for _ in AGENTS[period]:
+                i = AGENTS[period][_]
+                if i['genre'] == genre:
+                    profit = AGENTS[period][_]['profits'] * ((1 - discount) ** (env.now - period))
+                    hist.append(profit)
         present += AGENTS[env.now-1][name]['profits']
 
-    if present > ((1 + LSS_thresh) * hist):
-        # current is better than hist, so now we run the distribution
-        verdict = 'add' if add[genre] == True else 'keep'
-        ratio = hist/present
-    elif present < (1 - LSS_thresh) * hist:
-        # current is better than hist, so now we run the distribution
-        verdict = 'change' if change[genre] == True else 'keep'
-        ratio = present/hist
+    # ic(randomness, env.now)
+    if random.uniform(0, 1) > randomness:
+        if present > (1 + LSS_thresh) * np.mean(hist):
+            # current is better than hist, so now we run the distribution
+            verdict = 'add' if add[genre] is True else 'keep'
+            impatience_increase = -1
+            ratio = np.mean(hist) / present
+        elif present < (1 - LSS_thresh) * np.mean(hist):
+            # current is better than hist, so now we run the distribution
+            verdict = 'change' if change[genre] is True else 'keep'
+            impatience_increase = 1
+            ratio = present / np.mean(hist)
+        else:
+            ratio = 1
+        # ic(impatience, name)
+        for i in range(impatience):
+            dist = random.uniform(0, 1)
+
+            if dist > ratio:
+                strikes = True
+                break
+
     else:
-        ratio = 1
+        choice_list = ['keep']
+        if change[genre] is True:
+            choice_list.append('change')
 
-    for i in range(1, impatience):
-        dist = random.uniform(0, 1)
+        if add[genre] is True:
+            choice_list.append('add')
 
-        if dist > ratio:
-            strikes = True if verdict in ['add', 'keep'] else False
-            ic(ratio, dist, present, hist, name, env.now)
-            break
+        verdict = random.choice(choice_list)
+        strikes = random.choice([True, False])
+        impatience_increase = random.choice([-1, 1])
 
-    return {'verdict': verdict, 'strikes': strikes}
+    # ic(ratio, dist, present, np.mean(hist), name, verdict, strikes, env.now)
+
+    return {'verdict': verdict, 'strikes': strikes, 'impatience_increase': impatience_increase}
 
 
 def strikable_dicting(strikables_dict):
@@ -634,6 +673,8 @@ def strikable_dicting(strikables_dict):
     except:
         strikables_dict = strikables_dict
 
+    print('strikables_dict', strikables_dict)
+
     return strikables_dict
 
 
@@ -643,7 +684,7 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
     :param strikes:
     :param verdict:
     :param name:
-    :param strikables_dict: dict containing the varaibles that can be changed {'var 1': list of that variable}
+    :param strikables_dict: dict containing the variables that can be changed {'var 1': list of that variable}
     :return:
     """
 
@@ -656,30 +697,36 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
 
         striked = random.choice(list(strikables_dict.keys()))
 
-        options = strikables_dict[striked]
+        options = strikables_dict[striked].copy() # to avoid changing the actual dictionary
         chosen = int(random.uniform(0, len(options))) if striked != 'source' else min(int(np.random.poisson(1)), len(options)-1)
         chosen_entry = strikables_dict[striked][chosen] if striked != 'source' else sorted(strikables_dict[striked], reverse=True, key=lambda x: list(x.values())[0])[chosen]
 
-        strikables_dict[striked].remove(chosen_entry)
+        #print('before striking', strikables_dict[striked]) if striked == "source" else None
+        options.remove(chosen_entry)
+        #print('after striking', strikables_dict[striked]) if striked == "source" else None
 
-        strikables_dict[striked] = [chosen_entry] + strikables_dict[striked]
+        #print('before rebuilding', strikables_dict[striked]) if striked == "source" else None
+        options = [chosen_entry] + strikables_dict[striked]
+        #print('after rebuilding', strikables_dict[striked]) if striked == "source" else None
 
-        AGENTS[env.now][name][striked] = strikables_dict[striked]
+        AGENTS[env.now][name][striked] = options
+        #print(AGENTS[env.now][name][striked])
 
         print(name, 'changed', striked, 'from', AGENTS[env.now - 1][name][striked][0], 'to', chosen_entry,
               'at', env.now, 'period')
-
+        # ic(AGENTS[env.now][name]["LSS_tot"])
         AGENTS[env.now][name]["LSS_tot"] += 1
+        # ic(AGENTS[env.now][name]["LSS_tot"])
+
+    if verdict == 'add' or 'change':
+        """
+        If the agent added or changed something, it resets its impatience: impatience only builds up until something 
+        happens
+        """
+        print('Impatience of agent', name, 'was reset at period', env.now)
+        AGENTS[env.now][name]['impatience'][0] = AGENTS[0][name]['impatience'][0]
 
     # updated the list
-
-    elif verdict == 'change':
-
-        AGENTS[env.now][name]['impatience'][0] += 1
-
-    elif verdict == 'add':
-
-        AGENTS[env.now][name]['impatience'][0] -= 1
 
     return
 
@@ -687,10 +734,12 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
 def private_deciding_FF(name):
     AGENTS, BB_NAME_LIST, EP_NAME_LIST, TP_NAME_LIST, env = config.AGENTS, config.BB_NAME_LIST, config.EP_NAME_LIST, config.TP_NAME_LIST, config.env
 
+    randomness = config.RANDOMNESS
+
     agent = AGENTS[env.now - 1][name].copy()
     memory = agent['memory'][0]
     discount = agent['discount'][0]
-    LSS_thresh = agent['LSS_thresh'][0]
+    past_weight = agent['past_weight'][0]
     previous_var = agent['decision_var']
 
     if env.now - 1 - memory < 0:
@@ -703,23 +752,33 @@ def private_deciding_FF(name):
 
     genre = AGENTS[env.now - 1][name]["genre"]
 
-    profits, medians = [], []
+    profits = []
 
     for period in range(start, end):
-        for i in ('highest', 'lowest'):
-            profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * (
-                    (1 - discount) ** (end - 1 - period)))
-            medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * (
-                    (1 - discount) ** (end - 1 - period)))
+        for _ in AGENTS[period]:
+            i = AGENTS[period][_]
+
+            if i['genre'] == genre:
+                profits.append(i['profits'] * ((1 - discount) ** (end - period)))
+
+            """ profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * (
+                    (1 - discount) ** (end - 1 - period)))"""
+            """medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * (
+                    (1 - discount) ** (end - 1 - period)))"""
 
     denominator = (max(profits) - min(profits))
 
-    if denominator > 0:
-        ratio = (np.mean(medians) - AGENTS[end][name]["profits"]) / denominator
+    if random.uniform(0, 1) > randomness:
+        if denominator > 0:
+            ratio = (np.mean(profits) - AGENTS[end][name]["profits"]) / denominator
+            # ic(AGENTS[end][name]["profits"])
+            # ic(np.mean(profits))
+        else:
+            ratio = 0
     else:
-        ratio = 0
+        ratio = random.uniform(0, 1)
 
-    new_value = LSS_thresh * ratio + (1 - LSS_thresh) * previous_var
+    new_value = (1 - past_weight) * ratio + past_weight * previous_var
 
     return new_value
 
@@ -733,6 +792,8 @@ def public_deciding_FF(name):
     """
     AGENTS, AGENTS, MIX, env = config.AGENTS, config.AGENTS, config.MIX, config.env
 
+    randomness = config.RANDOMNESS
+
     now = AGENTS[env.now - 1][name]
 
     rationale = now['rationale'][0]
@@ -740,38 +801,33 @@ def public_deciding_FF(name):
     discount = now['discount'][0]
     # target = now['target'][0]
     # eta_acc = now['dd_eta']['current']
-    LSS_thresh = now['LSS_thresh'][0]
+    past_weight = now['past_weight'][0]
     previous_var = now['decision_var']
     # SorT = now['dd_SorT']['current']
 
     ratio = previous_var
 
-    if env.now - 1 - 2 * memory > 0:
-        t_1, t_2 = AGENTS[env.now - 1 - memory][name], AGENTS[env.now - 1 - 2 * memory][name]
-        if t_1['rationale'][0] == t_2['rationale'][0] == rationale:
-            # three conditions must be filled: we must have two memory cycles in order to compare then (normally 2 years),
-            # and that cycle must have the same rationale and the same target, otherwise the policy maker changed rationale
-            # or the target was changed. If they are not filled, ratio remains as zero which tells the policy maker to keep
-            # doing whatever
-            if rationale == 'green':
-                # the policy maker wants less emissions
-                dictionary = MIX
-                restriction = {'status': 'contracted'}
-                rationale = 'avoided'
-            else:
-                dictionary = AGENTS
-                restriction = {'genre': 'TP'}
-                rationale = 'RandD' if rationale == 'innovation' else 'capacity'
-            results = []
-            for period in range(env.now - 1 - memory, env.now - 1):
-                current = finding_FF(dictionary.get(period), rationale, 'sum', restriction)['value']
-                before = finding_FF(dictionary.get(period - memory), rationale, 'sum', restriction)['value']
-                increase = (current - before)
-                results.append(increase)
+    if env.now - 1 - memory > 0:
+        if rationale == 'green':
+            # the policy maker wants less emissions
+            dictionary = MIX
+            restriction = {'status': 'contracted'}
+            rationale = 'avoided'
+        else:
+            dictionary = AGENTS
+            restriction = {'genre': 'TP'}
+            rationale = 'RandD' if rationale == 'innovation' else 'capacity'
+        results = []
+        start = max(1, env.now - 1 - memory)
+        end = env.now - 1
+        for period in range(start, end):
+            current = finding_FF(dictionary.get(period), rationale, 'sum', restriction)['value']
+            before = finding_FF(dictionary.get(period - 1), rationale, 'sum', restriction)['value']
+            increase = (current - before)
+            results.append(increase)
+        ratio = (np.mean(results) - results[-1]) / (max(results) - min(results)) if random.uniform(0, 1) > randomness else random.uniform(0, 1)
 
-            ratio = (np.mean(results) - results[-1]) / (max(results) - min(results))
-
-    new_value = LSS_thresh * ratio + (1 - LSS_thresh) * previous_var
+    new_value = (1 - past_weight) * ratio + past_weight * previous_var
 
     return new_value
 
@@ -857,7 +913,7 @@ def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, cap
 
 
 def policymaking_FF(dd, Policies, value,
-                    add=False):
+                    add=False, rationale=False):
     """ This function adds a current policy to the pool of perenious policies as well as change the current policy.
      dd is the dictionary that changed, Policies is the list of current policies Now policies is the only output, which
       is the list of policies dictionary
@@ -883,6 +939,8 @@ def policymaking_FF(dd, Policies, value,
             'deadline': env.now + 1 + POLICY_EXPIRATION_DATE,
             'value': value
         })
+        if rationale != False:
+            Policy['rationale'] = rationale
         Policies.append(Policy.copy())
 
     """ now we check if what we changed was policy or incentivized source """
@@ -960,6 +1018,7 @@ def capital_adequacy_rationing_FF(receivables_dict, wallet):
     recv_w_risk = {source: receivables_dict[source] * (1 + risk_dict[source]) for source in receivables_dict}
     denominator = sum(recv_w_risk[source] for source in recv_w_risk)
     car_ratio = wallet / denominator if denominator > 0 else BASEL
+    # ic(car_ratio)
     return car_ratio
 
 
@@ -984,6 +1043,12 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
     adressed_projects = {}
     adressed_projects_NPVs = []
     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
+    max_price = max(source_price.values())
+    for source in list(source_price.keys()):
+        if source_price[source] == 0:
+            source_price[source] = max_price
+
+    # print('prices at time', env.now, source_price)
 
     interest_r = r * (1 + value) if genre == 'BB' else r * (1 - value)  # if the agent is a private bank it increases
     # the general interest rate by (1+risk), on the other hand, if the agent is the development bank it reduces the
@@ -991,28 +1056,27 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
     car_ratio = capital_adequacy_rationing_FF(new_receivables, new_wallet)
 
-    time = env.now - 1  # if genre == 'BB' else env.now -1  # The DBB looks at the present period
+    time = env.now - 1 # - 1  # if genre == 'BB' else env.now -1  # The DBB looks at the present period
 
-    if env.now > 0 and len(CONTRACTS.get(time)) > 0 and car_ratio >= BASEL:
-        print('There are contract here')
+    if env.now > 0 and len(CONTRACTS.get(time)) > 0: # and car_ratio >= BASEL:
+        # print('There are contract here')
         for _ in CONTRACTS.get(time):
             i = CONTRACTS.get(time).get(_).copy()
-            """ the bank only appends that project if its adressed to it, is a project and it would accept to finance such source"""
+            """ the bank only appends that project if its addressed to it, is a project and it would accept to finance such source"""
             if i.get('receiver') == name and i.get('status') == 'project':
                 if genre == 'BB':
-                    financing_risk = 0 if i.get('guarantee') == True else value
+                    financing_risk = 0 if i.get('guarantee') == True or genre == 'DBB' else value
                 else:
                     financing_risk = 0
-                cash_flow_risk = 0 if i.get('auction_contracted') == True else value
+                cash_flow_risk = 0 if i.get('auction_contracted') == True or genre == 'DBB' else value
                 price = i.get('price') if i.get('auction_contracted') == True else source_price.get(i.get('source'))
                 NPV = npv_generating_FF(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, True)
-                print(env.now, i.get('receiver'), i.get('TP'), NPV)
+                print('at', env.now, 'project from', i.get('receiver'), i.get('TP'), 'has this NPV', NPV)
                 if NPV > tresHOLD:
                     adressed_projects_NPVs.append({'code': _, 'NPV': NPV})
                     adressed_projects.update({_: i.copy()})
-                    print('project approved', i.copy())
         adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x.get('NPV'), reverse=True)
 
     for project in adressed_projects_NPVs:
@@ -1022,16 +1086,19 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
         new_new_wallet = new_wallet - j.get('CAPEX')
         receiv_value = new_receivables.get(k) + j.get('CAPEX') * (
-                interest_r ** j.get('building_time')) if guaranteeing == False else new_receivables.get(k)
+                interest_r ** j.get('building_time')) if guaranteeing is False else new_receivables.get(k)
         new_new_receivables = new_receivables.copy()
         new_new_receivables.update({k: receiv_value})
         car_ratio = capital_adequacy_rationing_FF(new_new_receivables, new_new_wallet)
 
-        #ic(env.now, name, RISKS[k], value, k, accepted_source, new_new_wallet, car_ratio)
-        if (RISKS[k] < value or k == accepted_source) and new_new_wallet >= 0 and car_ratio >= BASEL:
+        # ic(env.now, name, RISKS[k], value, k, accepted_source, new_new_wallet, car_ratio)
+        acceptance_cond = RISKS[k] < value if genre == 'BB' else k == accepted_source
+        if acceptance_cond is True and new_new_wallet >= 0 and car_ratio >= BASEL:
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
+            # print("new contract", j)
             new_contract = j.copy()
+            print('project approved', j.copy())
             if guaranteeing == True:
                 new_contract.update({'sender': 'DBB',
                                      'receiver': j.get('sender'),
@@ -1043,12 +1110,13 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                     'receiver': j.get('sender'),
                     'status': 'financed',
                     'ammortisation': env.now + 1 + AMMORT,
-                    'risk': value,
+                    'risk': RISKS[k],
                     'principal': j.get('CAPEX') * (interest_r ** j.get('building_time'))})
             CONTRACTS.get(env.now).update({i: new_contract})
             print(name, 'financed', new_contract)
-            print()
         else:
+            # print(name, 'Rejected due to')
+            # ic(acceptance_cond, new_new_wallet >= 0, car_ratio >= BASEL)
             new_contract = j.copy()
             new_contract.update({'status': 'rejected'})
             CONTRACTS.get(env.now).update({i: new_contract})

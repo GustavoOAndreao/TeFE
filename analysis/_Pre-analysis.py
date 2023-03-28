@@ -3,10 +3,11 @@ import numpy as np
 import os
 import json
 import timeit
+from itertools import zip_longest
 
 
 def search_json_for(_json, __csv=None, print_=False):
-    print(_json) if print_ == True else None
+    print(_json) if print_ is True else None
 
     _csv = pd.DataFrame() if __csv is None else __csv
 
@@ -18,13 +19,24 @@ def search_json_for(_json, __csv=None, print_=False):
             row = {'period': period}
 
             for i in _entry:
-                row.update({i: _entry[i]})
+                if i != 'portfolio_of_plants' or 'portfolio_of_projects':
+                    row.update({i: _entry[i]})
+                else:
+                    row.update({i: len(str(_entry[i]))})
+            row = pd.DataFrame.from_dict(row, orient='index').transpose()
 
+            # _csv = _csv.append(row, ignore_index=True)
+
+            _csv = pd.concat([_csv.loc[:], row]).reset_index(drop=True)
+
+            """
+            previous solution. Current one is faster
             row = pd.DataFrame(row, index=[0])
 
             # _csv = _csv.append(row, ignore_index=True)
 
             _csv = pd.concat([_csv.loc[:], row]).reset_index(drop=True)
+            """
 
     return _csv
 
@@ -33,14 +45,15 @@ def concat_csvs(json_files, file_type, name):
     df = pd.DataFrame()
     to_search = json_files[file_type]
     start = timeit.default_timer()
-    for entry in range(0, len(to_search) - 1):
+    for entry in range(0, len(to_search)):
         json_file = open(to_search[entry])
         data = search_json_for(json.load(json_file))
+        data['seed_name'] = str(entry)
         df = pd.concat([df, data], ignore_index=True, sort=False)
 
         print(str(entry) + ' of ' + str(len(to_search) - 1) + ' is done')
-
-    df.to_csv(name, index=False, sep=';')
+        # print(data.shape[0])
+    df.to_csv(name, index=False)
     stop = timeit.default_timer()
 
     return print(name + " is done after " + str(((stop - start)/60)) + ' minutes')
@@ -62,7 +75,11 @@ if __name__ == '__main__':
     # print(json_file)
     # global df
 
-    concat_csvs(json_files, 'mix', 'mix_test')
-    concat_csvs(json_files, 'contracts', 'contracts_test')
-    concat_csvs(json_files, 'agents', 'agents_test')
-    concat_csvs(json_files, 'technologic', 'technologic_test')
+    #print('STARTING MIX FILES')
+    #concat_csvs(json_files, 'mix', 'mix_test.csv')
+    print('STARTING CONTRACTS FILES')
+    concat_csvs(json_files, 'contracts', 'contracts_test.csv')
+    print('STARTING AGENTS FILES')
+    concat_csvs(json_files, 'agents', 'agents_test.csv')
+    print('STARTING TECHNOLOGIC FILES')
+    concat_csvs(json_files, 'technologic', 'technologic_test.csv')

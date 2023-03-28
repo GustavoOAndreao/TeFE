@@ -25,7 +25,7 @@ random.seed(seed)
 
 class TP(object):
     def __init__(self, env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold,
-                 decision_var, cap_conditions, capped, impatience, current_weight, LSS_thresh, memory, discount,
+                 decision_var, cap_conditions, impatience, past_weight, LSS_thresh, memory, discount,
                  strategy):
         """
         Technology provider. Provides productive capacity for energy producers to produce energy (molecules or
@@ -73,7 +73,7 @@ class TP(object):
         # e.g. self_NPV={'value' : 2000, 'MWh' : 30}
         self.RnD_threshold = RnD_threshold
         self.capacity_threshold = capacity_threshold
-        # self.dd_profits = {0: 0, 1: 0, 2: 0} # if Technology['EorM'] == 'E' else {3: 0, 4: 0, 5: 0}  # same as profits,
+        self.dd_profits = {0: 0, 1: 0, 2: 0} # if Technology['EorM'] == 'E' else {3: 0, 4: 0, 5: 0}  # same as profits,
         # but as dict. Makes accounting faster and simpler
         # self.dd_source = dd_source
         self.decision_var = decision_var
@@ -88,7 +88,7 @@ class TP(object):
         # self.strategy = strategy
         # self.dd_strategies = dd_strategies
         self.impatience = impatience
-        self.current_weight = current_weight
+        self.past_weight = past_weight
         self.LSS_thresh = LSS_thresh
         self.memory = memory
         self.discount = discount
@@ -103,10 +103,11 @@ class TP(object):
                            'memory': memory,
                            'discount': discount,
                            'strategy': strategy,
-                           'current_weight': current_weight
+                           'past_weight': past_weight
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
+
 
         self.action = env.process(run_TP(
             self.name,
@@ -124,7 +125,7 @@ class TP(object):
             self.self_NPV,
             self.capped,
             self.impatience,
-            self.current_weight,
+            self.past_weight,
             self.LSS_thresh,
             self.memory,
             self.discount,
@@ -133,7 +134,8 @@ class TP(object):
             self.innovation_index,
             self.shareholder_money,
             self.true_innovation_index,
-            self.strikables_dict
+            self.strikables_dict,
+            self.dd_profits
         ))
 
 
@@ -152,7 +154,7 @@ def run_TP(name,
            self_NPV,
            capped,
            impatience,
-           current_weight,
+           past_weight,
            LSS_thresh,
            memory,
            discount,
@@ -161,7 +163,8 @@ def run_TP(name,
            innovation_index,
            shareholder_money,
            true_innovation_index,
-           strikables_dict):
+           strikables_dict,
+           dd_profits):
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env  # globals
 
     while True:
@@ -177,8 +180,8 @@ def run_TP(name,
         _memory = memory[0] if env.now == 0 else AGENTS[env.now - 1][name]['memory'][0]
         _discount = discount[0] if env.now == 0 else AGENTS[env.now - 1][name]['discount'][0]
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
-        _current_weight = current_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['current_weight'][0]
-        _strategy = strategy[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
+        _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
+        _strategy = strategy[0] if env.now == 0 else AGENTS[env.now - 1][name]['strategy'][0]
         value = decision_var
         profits = 0  # in order to get the profits of this period alone
 
@@ -189,12 +192,16 @@ def run_TP(name,
         #                                                               #
         #################################################################
 
-        if env.now > 0:
+        profits = 0
+        dd_profits[Technology['source']] = 0
+
+        if env.now > 0 and len(CONTRACTS[env.now - 1])>0:
             for _ in CONTRACTS[env.now - 1]:
                 i = CONTRACTS[env.now - 1][_]
                 if i['receiver'] == name and i['status'] == 'payment':
                     wallet += i['value']
                     profits += i['value']
+                    dd_profits[Technology['source']] += i['value']
 
         #################################################################
         #                                                               #
@@ -202,11 +209,19 @@ def run_TP(name,
         #                        available to it                        #
         #                                                               #
         #################################################################
+
         if env.now > 0:
             for _ in CONTRACTS[env.now - 1]:
                 i = CONTRACTS[env.now - 1][_]
+                incentive = i['value']
                 if i['receiver'] == name and i['sender'] == 'TPM':
-                    wallet += i['value']
+                    if i['bound'] == 'capacity':
+                        capacity += incentive
+                    elif i['bound'] == 'innovation':
+                        RandD += incentive
+                        innovation_index += incentive
+                    else:
+                        wallet += incentive
 
         #################################################################
         #                                                               #
@@ -243,7 +258,7 @@ def run_TP(name,
             i = Technology['CAPEX']
             Technology.update({"base_CAPEX": i})
 
-        if Technology['transport'] == False:
+        if Technology['transport'] is False:
             """ if the technology is not transportable, then the productive capacity impacts on the CAPEX """
             j = Technology['base_CAPEX']
             """ we have to produce the actual CAPEX, with is the base_CAPEX multiplied by euler's number to the
@@ -259,6 +274,7 @@ def run_TP(name,
             Technology.update({"base_CAPEX": i})
 
         """3) now, if the TP has money, it will spend it on either capacity, imitation or innovation"""
+        ic(name, wallet, value, env.now)
         if wallet > 0 and value > 0:
             wallet -= wallet * value
             """ having money, the TP will spend a portion (given by the value) of its wallet on something """
@@ -266,21 +282,22 @@ def run_TP(name,
                 """ if the strategy is to do R&D, then it will do R&D"""
                 RandD += wallet * value
                 innovation_index += wallet * value
-            else:
+            elif _strategy == 'capacity':
                 """ if not, then it will spend on productive capacity"""
                 capacity += wallet * value
                 # print(name, 'got', wallet * value, 'more capacity to its roster, and now capacity is', capacity)
 
         """4) we have to check if the TP reached the threshold for innovation or imitation"""
         a = 0
-        if RandD > RnD_threshold and (strategy == 'innovation' or strategy == 'imitation'):
-            """ if we reached the threshold, then we to set the bar of the RnD """
-            RnD_threshold += RandD
+        if RandD > RnD_threshold: # and (strategy == 'innovation' or strategy == 'imitation'):
             """ then we get the 'a' which can either be a poisson + normal for innovation, or a simple binomial.
              Values above or equal (for the imitation) 1 indicate that innovation or imitation occured """
             a = np.random.poisson(1) + np.random.normal(0, 1)
 
-            if a >= 1:
+            """ if we reached the threshold, then we to set the bar of the RnD """
+            RnD_threshold += random.uniform(RandD, RandD*a)
+
+            if a > 1:
                 """ we are dealing with innovation """
                 true_innovation_index += a
                 RnD_threshold *= rNd_INCREASE * a
@@ -292,6 +309,7 @@ def run_TP(name,
                 else:
                     new_what_on = (1 / a) * Technology[what_on]
                 Technology.update({what_on: new_what_on})
+                print(name, ' got a new ', what_on, ' by ', a, ' at time ', env.now)
 
                 if a > RADICAL_THRESHOLD:
                     """ if we reached over the radical innovation threshold we have to signal it """
@@ -314,25 +332,26 @@ def run_TP(name,
 
         """ 8) we must also check if the capping process is on"""
 
-        now = 0
-        if len(MIX[env.now - 1]) > 0:
-            # if there is no capping, we must first make sure that it has not started
-            now = finding_FF(MIX[env.now - 1], 'MW', 'sum', {'EP': name})['value']
-            if now > cap_conditions['cap']:
-                capped = True
+        if len(cap_conditions) > 0:
+            now = 0
+            if len(MIX[env.now - 1]) > 0:
+                # if there is no capping, we must first make sure that it has not started
+                now = finding_FF(MIX[env.now - 1], 'MW', 'sum', {'EP': name})['value']
+                if now > cap_conditions['cap']:
+                    capped = True
 
-            else:
-                capped = False
+                else:
+                    capped = False
 
-        if capped == True:
-            # capping process is on, so we have to make sure that the capacity increased
-            previous = finding_FF(MIX[env.now - 2], 'MW', 'sum', {'EP': name})['value']
+            if capped is True:
+                # capping process is on, so we have to make sure that the capacity increased
+                previous = finding_FF(MIX[env.now - 2], 'MW', 'sum', {'EP': name})['value']
 
-            if now > previous:
-                # the capacity increased, so we have to apply the capping conditions
-                Technology.update({
-                    cap_conditions['char']: Technology[cap_conditions['char']] * (1 + cap_conditions['increase'])
-                })
+                if now > previous:
+                    # the capacity increased, so we have to apply the capping conditions
+                    Technology.update({
+                        cap_conditions['char']: Technology[cap_conditions['char']] * (1 + cap_conditions['increase'])
+                    })
 
         """5) we also have to update the TECHNOLOGIC dictionary for the next period with the current technology
          (applying any changes if there were any whatsover)"""
@@ -367,7 +386,7 @@ def run_TP(name,
                   "self_NPV": self_NPV,
                   "capped": capped,
                   "impatience": impatience,
-                  "current_weight": current_weight,
+                  "past_weight": past_weight,
                   "LSS_thresh": LSS_thresh,
                   "memory": memory,
                   "discount": discount,
@@ -375,13 +394,19 @@ def run_TP(name,
                   "innovation_index": innovation_index,
                   "shareholder_money": shareholder_money,
                   "true_innovation_index": true_innovation_index,
-                  "LSS_tot": LSS_tot,
-                  "Delta_LSS_1": (LSS_tot - AGENTS[env.now-1][name]['LSS_tot']) / AGENTS[env.now-1][name]['LSS_tot'] if AGENTS[env.now-1][name]['LSS_tot'] > 0 else 0
+                  "LSS_tot": LSS_tot
                   }
+
+        if env.now > 1:
+            update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
+            update["LSS_weak"] = AGENTS[env.now - 1][name]['LSS_weak'] + decision_var if decision_var != AGENTS[env.now - 1][name]['decision_var'] else AGENTS[env.now - 1][name]['LSS_weak']
+        else:
+            update["LSS_weak"] = LSS_tot
 
         AGENTS[env.now][name] = update.copy()
         if env.now > 0:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
+            # profits_dedicting_FF(name)
 
         yield env.timeout(1)
 
@@ -413,9 +438,9 @@ class TPM(object):
                            'discount': discount,
                            "source": source,
                            "disclosed_thresh": disclosed_thresh,
-                           "past_weight": past_weight,
-                           'instrument': instrument
-                           }
+                           "past_weight": past_weight} # ,
+                           # 'instrument': instrument
+                           # }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
 
@@ -484,7 +509,7 @@ def run_TPM(genre,
         #                                                               #
         #################################################################
 
-        policy_pool = [{'instrument': instrument,
+        policy_pool = [{'instrument': _instrument,
                         'source': _source,
                         'budget': value * wallet}]
 
@@ -494,39 +519,37 @@ def run_TPM(genre,
 
         if env.now >= 2:
             for entry in policy_pool:
+
                 instrument = entry['instrument']
                 chosen_source = entry['source']
                 budget = entry['budget']
                 value = disclosed_var
 
-                if instrument == 'supply':
-
-                    firms = []
-                    for _ in AGENTS[env.now - 1]:
-                        i = AGENTS[env.now - 1][_]
-                        if i['genre'] == 'TP' and (i['source'] == chosen_source):
-                            firms.append(_)
-
-                    if len(firms) > 0:
-                        """ we have to be certain that there are companies to be inbcentivised and now divides the possible incentive by the number of companies """
-                        # print('incentivised_firms', incentivised_firms)
-                        incentive = budget / len(firms)
-
-                        """ and now we give out the incentives"""
-                        for TP in firms:
-                            code = uuid.uuid4().int
-                            CONTRACTS[env.now].update({
-                                code: {
-                                    'sender': name,
-                                    'receiver': TP,
-                                    'status': 'payment',
-                                    'value': incentive}})
-                        wallet -= budget
+                if instrument == 'unbound':
+                    bound3 = 'unbound'
                 else:
-                    """
-                    demmand-side incentives
-                    """
-                    print('TBD')
+                    bound3 = _rationale if 'rationale' not in entry else entry['rationale']
+
+                firms = []
+                for _ in AGENTS[env.now - 1]:
+                    i = AGENTS[env.now - 1][_]
+                    if i['genre'] == 'TP' and (i['source'] == chosen_source):
+                        firms.append(_)
+                if len(firms) > 0:
+                    """ we have to be certain that there are companies to be inbcentivised and now divides the possible incentive by the number of companies """
+                    # print('incentivised_firms', incentivised_firms)
+                    incentive = budget / len(firms)
+                    """ and now we give out the incentives"""
+                    for TP in firms:
+                        code = uuid.uuid4().int
+                        CONTRACTS[env.now].update({
+                            code: {
+                                'sender': name,
+                                'receiver': TP,
+                                'status': 'payment',
+                                'bound': bound3,
+                                'value': incentive}})
+                    wallet -= budget
 
             value = disclosed_var
 
@@ -978,7 +1001,7 @@ class DBB(object):
                            'discount': discount,
                            'disclosed_thresh': disclosed_thresh,
                            'rationale': rationale,
-                           'policy': policy
+                           'instrument': instrument
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
@@ -989,7 +1012,7 @@ class DBB(object):
             self.genre,
             self.name,
             self.wallet,
-            self.instrumentinstrument,
+            self.instrument,
             self.source,
             self.decision_var,
             self.disclosed_var,
@@ -1032,6 +1055,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
             car_ratio,
             strikables_dict,
             LSS_tot):
+
+    global decisions
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.AGENTS_r, config.env  # globals
 
     while True:
@@ -1051,6 +1076,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
         _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
+        LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         value = disclosed_var
 
         #################################################################
@@ -1083,10 +1109,10 @@ def run_DBB(NPV_THRESHOLD_DBB,
                     wallet += i['value']
                 elif i['receiver'] == 'DBB' and i['guarantee'] == True:
                     """ we are dealing with a guarantee"""
-                    wallet += i['value']
+                    # wallet += i['value']
 
                     if i['status'] == 'default':
-                        """ the company went into deafult and the guarantee is activated"""
+                        """ the company went into default and the guarantee is activated"""
                         j = i.copy()
                         j.update({'sender': 'DBB',
                                   'receiver': i['BB'],
@@ -1112,39 +1138,38 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-        policy_pool = [{'instrument': instrument,
+        policy_pool = [{'instrument': _instrument,
                         'source': _source,
                         'budget': value * wallet}]
 
         if len(policies) > 0:
-            policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwards
-            # all the other policies
+            policy_pool.append(policies)  # with this we create a temporary list with first the current policy and
+            # afterwards all the other policies
 
-        if env.now >= 2:
+        # ic(len(CONTRACTS[env.now - 1]), _instrument) if env.now>0 else None
+        if env.now >= 1 and len(CONTRACTS[env.now - 1]) > 0:
             for entry in policy_pool:
-                instrument = entry['instrument']
-                chosen_source = entry['source']
+                entry_instrument = entry['instrument']
+                entry_chosen_source = entry['source']
                 budget = entry['budget']
-                value = disclosed_var
+                entry_value = disclosed_var
 
-                if instrument == 'finance' and len(CONTRACTS[env.now - 1]) > 0:
-                    financing = financing_FF(genre, name, wallet, receivable, value, financing_index,
-                                             accepted_source=chosen_source)
+                if entry_instrument == 'finance':
+                    # print('DBB is trying to finance')
+                    financing = financing_FF(genre, name, wallet, receivable, entry_value, financing_index,
+                                             accepted_source=entry_chosen_source)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
 
-                else:
+                elif entry_instrument == 'guarantee':
                     """ We are dealing with guarantees """
-                    financing = financing_FF(genre, name, wallet, receivable, value, financing_index,
-                                             guaranteeing=True, accepted_source=chosen_source)
+                    financing = financing_FF(genre, name, wallet, receivable, entry_value, financing_index,
+                                             guaranteeing=True, accepted_source=entry_chosen_source)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
                     financing_index = financing['financing_index']
-
-                """ and now back to the actual variables for the current policy"""
-            value = disclosed_var
 
         #################################################################
         #                                                               #
@@ -1169,6 +1194,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             decision_var = max(0, min(1, public_deciding_FF(name)))
             disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
             decisions = evaluating_FF(name)
+            # print('strikes are', decisions['strikes'])
 
         #################################################################
         #                                                               #
@@ -1200,9 +1226,14 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "car_ratio": car_ratio,
             "strikables_dict": strikables_dict,
             "current_state": current_stating_FF(_rationale),
-            "LSS_tot": LSS_tot,
-            "Delta_LSS_1": (LSS_tot - AGENTS[env.now-1][name]['LSS_tot']) / AGENTS[env.now-1][name]['LSS_tot'] if (env.now > 1 and AGENTS[env.now-1][name]['LSS_tot'] > 0) else 0
+            "LSS_tot": LSS_tot
         }
+
+        if env.now > 1:
+            update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
+            update["LSS_weak"] = AGENTS[env.now - 1][name]['LSS_weak'] + decision_var - AGENTS[env.now - 1][name]['decision_var']
+        else:
+            update["LSS_weak"] = LSS_tot
 
         AGENTS[env.now][name] = update.copy()
         if env.now > 0:
@@ -1535,7 +1566,7 @@ def run_EP(env,
            dd_profits,
            LSS_tot,
            shareholder_money):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.AGENTS_r, config.env
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, AGENTS_r, MIX_EXPANSION, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.AGENTS_r, config.MIX_EXPANSION, config.env
 
     while True:
 
@@ -1555,8 +1586,10 @@ def run_EP(env,
         _current_weight = current_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['current_weight'][0]
         _tolerance = tolerance[0] if env.now == 0 else AGENTS[env.now - 1][name]['tolerance'][0]
         index = {0: 0, 1: 0, 2: 0} if env.now == 0 else indexing_FF(name)
+        LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         value = decision_var
         profits = 0  # in order to get the profits of this period alone
+        dd_profits = {0: 0, 1: 0, 2: 0}
 
         #############################################################
         #                                                           #
@@ -1676,6 +1709,7 @@ def run_EP(env,
         if env.now > 0 and len(CONTRACTS[env.now - 1]) > 0:
             for _ in CONTRACTS[env.now - 1]:
                 i = CONTRACTS[env.now - 1][_]
+                # print('contract', _, i)
                 if i['receiver'] == name and i['status'] == 'financed':
                     """ the project was financed """
                     last_acquisition_period = env.now
@@ -1721,7 +1755,7 @@ def run_EP(env,
                     })
                     """elif (i['guarantee'] == True or i['auction_contracted'] == True) and i['receiver'] == name and i['status'] == 'project' and 'failed_attempts' not in i:
                     # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be 
-                    # inserrted into the portfolio_of_projects dictionary
+                    # inserted into the portfolio_of_projects dictionary
                     j = i.copy()
                     j.update({'code': _})
                     if 'limit' not in j:
@@ -1729,9 +1763,10 @@ def run_EP(env,
                         # which we put the name of the banks that rejected the project
                         j['limit'], j['failed_attempts'] = env.now + _tolerance, [i['receiver']]
                     portfolio_of_projects.update({_: j})"""
-                elif i['sender'] == name and i['status'] == 'rejected' and i['CAPEX'] <= wallet:
+                elif i['receiver'] == name and i['status'] == 'rejected' and i['CAPEX'] <= wallet:
                     j = i.copy()
                     """ if no one accepts to finance and the EP has enough money, it can pay for the plant itself"""
+                    print(name, 'has just reinvested')
                     wallet -= j['CAPEX']
                     """if _ in portfolio_of_projects:
                         portfolio_of_projects.pop(j['code'])"""
@@ -1781,7 +1816,9 @@ def run_EP(env,
         #                                                           #
         #############################################################
 
-        if env.now % periodicity == 0 and env.now > 1 + periodicity and value > 0:  # and wallet > 0:
+        if env.now % periodicity == 0 and env.now > 1 and value > 0:  # and wallet > 0:
+            # print(name, 'is trying to increase its capacity')
+            # ic(value, MIX_EXPANSION, value * MIX_EXPANSION)
             TP = {'TP': 0,
                   'NPV': False,
                   'Lumps': 0,
@@ -1792,7 +1829,7 @@ def run_EP(env,
                 i = TECHNOLOGIC[env.now - 1][_]
                 if i['source'] == _source:
                     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
-                    Lumps = np.ceil((value * DEMAND[env.now - 1]) / i['MW'])
+                    Lumps = np.ceil((value * MIX_EXPANSION) / i['MW'])
                     price = source_price[i['source']]
                     NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'],
                                             i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
@@ -1820,7 +1857,7 @@ def run_EP(env,
                     elif agent['genre'] == 'DBB':
                         BB_.append([agent['name'], agent['disclosed_var']])
                 number = np.random.poisson(1)
-                print(BB_)
+                # print(BB_)
                 number = number if number < len(BB_) else len(BB_) - 1
                 _BB = sorted(BB_, key=lambda x: x[1])[number][0]
                 # first we sort the list of agents. With the .values() we have both keys and values. The [number]
@@ -1930,8 +1967,13 @@ def run_EP(env,
                   "profits": profits,
                   "dd_profits": dd_profits,
                   "LSS_tot": LSS_tot,
-                  "Delta_LSS_1": ((LSS_tot - AGENTS[env.now-1][name]['LSS_tot']) / AGENTS[env.now-1][name]['LSS_tot']) if (env.now > 1 and AGENTS[env.now-1][name]['LSS_tot'] > 0) else 0
                   }
+
+        if env.now > 1:
+            update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
+            update["LSS_weak"] = AGENTS[env.now - 1][name]['LSS_weak'] + decision_var if decision_var != AGENTS[env.now - 1][name]['decision_var'] else AGENTS[env.now - 1][name]['LSS_weak']
+        else:
+            update["LSS_weak"] = LSS_tot
 
         AGENTS[env.now][name] = update.copy()
         if env.now > 0:
@@ -1944,8 +1986,8 @@ def run_EP(env,
 class Demand(object):
     def __init__(self, env, initial_demand, when, increase):
         self.env = env
-        self.genre = 'D'
-        self.name = 'D'
+        self.genre = 'DD'
+        self.name = 'DD'
         self.initial_demand = initial_demand
         self.when = when
         self.increase = increase
@@ -1963,13 +2005,18 @@ def run_DD(env,
            initial_demand,
            when,
            increase):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.env
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN, MIX_EXPANSION, EP_NAME_LIST, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.MIX_EXPANSION, config.EP_NAME_LIST, config.env
 
     while True:
 
         print(env.now)
         # from_time_to_agents_FF(AGENTS)
         # from_time_to_agents_FF(TECHNOLOGIC)
+
+        if env.now < config.FUSS_PERIOD:
+            config.RANDOMNESS = 1
+        else:
+            config.RANDOMNESS = config.INITIAL_RANDOMNESS
 
         #################################################################
         #                                                               #
@@ -2029,12 +2076,14 @@ def run_DD(env,
             possible_projects = sorted(possible_projects, key=lambda x: (x['dispatchable'], x['OPEX']))
             chosen = []
             demand = DEMAND.copy()[env.now] * 24 * 30
+            print('full demand is ', demand)
             for plant in possible_projects:
                 if demand < 0:
                     """ if there is no more demand to be supplied, then the plant is not contracted"""
                     MIX[env.now][plant['code']].update({
                         'status': 'built'
                     })
+                    # print(MIX[env.now][plant['code']], 'was not contracted')
                 else:
                     """ if there is still demand to to be supplied, then, the power plant is contracted"""
                     MIX[env.now][plant['code']].update({
@@ -2042,6 +2091,7 @@ def run_DD(env,
                     })
                     chosen.append(plant)
                     demand -= plant['MWh']
+                    # print('demand decrease by', plant['MWh'])
             """ following the merit order, the system is precified in relation to its most costly unit"""
             chosen = sorted(chosen, key=lambda x: x['OPEX'])[-1]
             price = (chosen['OPEX'] + (chosen['CAPEX'] / chosen['lifetime'])) * (1 + MARGIN) / chosen['MWh']
@@ -2050,5 +2100,16 @@ def run_DD(env,
                 if i['auction_contracted'] != True:
                     MIX[env.now][i['code']].update({
                         'price': price})
+
+            if demand > 0:
+                MIX_EXPANSION += demand/len(EP_NAME_LIST)
+            else:
+                MIX_EXPANSION = config.INITIAL_DEMAND/len(EP_NAME_LIST)
+
+            AGENTS[env.now][name] = {
+                'name': name,
+                'genre': 'DD',
+                'Demand': DEMAND[env.now],
+                'Remaining_demand': demand}
 
         yield env.timeout(1)
