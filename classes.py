@@ -26,7 +26,7 @@ random.seed(seed)
 class TP(object):
     def __init__(self, env, name, wallet, capacity, Technology, RnD_threshold, capacity_threshold,
                  decision_var, cap_conditions, impatience, past_weight, LSS_thresh, memory, discount,
-                 strategy):
+                 strategy, starting_tech_age):
         """
         Technology provider. Provides productive capacity for energy producers to produce energy (molecules or
         electricity)
@@ -107,6 +107,8 @@ class TP(object):
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
+        self.starting_tech_age = starting_tech_age
+        self.prod_cap_pct = [0, 1]
 
 
         self.action = env.process(run_TP(
@@ -135,7 +137,9 @@ class TP(object):
             self.shareholder_money,
             self.true_innovation_index,
             self.strikables_dict,
-            self.dd_profits
+            self.dd_profits,
+            self.starting_tech_age,
+            self.prod_cap_pct
         ))
 
 
@@ -164,7 +168,9 @@ def run_TP(name,
            shareholder_money,
            true_innovation_index,
            strikables_dict,
-           dd_profits):
+           dd_profits,
+           starting_tech_age,
+           prod_cap_pct):
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env  # globals
 
     while True:
@@ -192,16 +198,16 @@ def run_TP(name,
         #                                                               #
         #################################################################
 
-        profits = 0
         dd_profits[Technology['source']] = 0
 
-        if env.now > 0 and len(CONTRACTS[env.now - 1])>0:
+        if env.now > 0 and len(CONTRACTS[env.now - 1]) > 0:
             for _ in CONTRACTS[env.now - 1]:
                 i = CONTRACTS[env.now - 1][_]
                 if i['receiver'] == name and i['status'] == 'payment':
                     wallet += i['value']
                     profits += i['value']
                     dd_profits[Technology['source']] += i['value']
+                    prod_cap_pct[1] += i['value']
 
         #################################################################
         #                                                               #
@@ -213,13 +219,12 @@ def run_TP(name,
         if env.now > 0:
             for _ in CONTRACTS[env.now - 1]:
                 i = CONTRACTS[env.now - 1][_]
-                incentive = i['value']
                 if i['receiver'] == name and i['sender'] == 'TPM':
+                    incentive = i['value']
                     if i['bound'] == 'capacity':
                         capacity += incentive
                     elif i['bound'] == 'innovation':
                         RandD += incentive
-                        innovation_index += incentive
                     else:
                         wallet += incentive
 
@@ -274,17 +279,17 @@ def run_TP(name,
             Technology.update({"base_CAPEX": i})
 
         """3) now, if the TP has money, it will spend it on either capacity, imitation or innovation"""
-        ic(name, wallet, value, env.now)
+        # ic(name, wallet, value, env.now)
         if wallet > 0 and value > 0:
             wallet -= wallet * value
             """ having money, the TP will spend a portion (given by the value) of its wallet on something """
             if _strategy == 'innovation':
                 """ if the strategy is to do R&D, then it will do R&D"""
                 RandD += wallet * value
-                innovation_index += wallet * value
             elif _strategy == 'capacity':
                 """ if not, then it will spend on productive capacity"""
                 capacity += wallet * value
+                prod_cap_pct[0] += wallet * value
                 # print(name, 'got', wallet * value, 'more capacity to its roster, and now capacity is', capacity)
 
         """4) we have to check if the TP reached the threshold for innovation or imitation"""
@@ -292,12 +297,14 @@ def run_TP(name,
         if RandD > RnD_threshold: # and (strategy == 'innovation' or strategy == 'imitation'):
             """ then we get the 'a' which can either be a poisson + normal for innovation, or a simple binomial.
              Values above or equal (for the imitation) 1 indicate that innovation or imitation occured """
-            a = np.random.poisson(1) + np.random.normal(0, 1)
+            tech_age = starting_tech_age + innovation_index
+            a = (1/tech_age) * np.random.poisson(1) + (1 - 1/tech_age) * np.random.normal(0, 1)
 
             """ if we reached the threshold, then we to set the bar of the RnD """
             RnD_threshold += random.uniform(RandD, RandD*a)
 
             if a > 1:
+                innovation_index += a
                 """ we are dealing with innovation """
                 true_innovation_index += a
                 RnD_threshold *= rNd_INCREASE * a
@@ -309,7 +316,7 @@ def run_TP(name,
                 else:
                     new_what_on = (1 / a) * Technology[what_on]
                 Technology.update({what_on: new_what_on})
-                print(name, ' got a new ', what_on, ' by ', a, ' at time ', env.now)
+                # print(name, ' got a new ', what_on, ' by ', a, ' at time ', env.now)
 
                 if a > RADICAL_THRESHOLD:
                     """ if we reached over the radical innovation threshold we have to signal it """
@@ -365,12 +372,14 @@ def run_TP(name,
         if env.now > 0:
             decision_var = max(0, min(1, private_deciding_FF(name)))
             decisions = evaluating_FF(name)
+            verdict = decisions['verdict']
 
         #############################################################
         #                                                           #
         #  Before leaving, the agent must update the outside world  #
         #                                                           #
         #############################################################
+
         update = {"name": name,
                   "genre": genre,
                   "wallet": wallet,
@@ -394,12 +403,13 @@ def run_TP(name,
                   "innovation_index": innovation_index,
                   "shareholder_money": shareholder_money,
                   "true_innovation_index": true_innovation_index,
-                  "LSS_tot": LSS_tot
+                  "LSS_tot": LSS_tot,
+                  "prod_cap_pct": prod_cap_pct
                   }
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = AGENTS[env.now - 1][name]['LSS_weak'] + decision_var if decision_var != AGENTS[env.now - 1][name]['decision_var'] else AGENTS[env.now - 1][name]['LSS_weak']
+            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
         else:
             update["LSS_weak"] = LSS_tot
 
@@ -412,12 +422,14 @@ def run_TP(name,
 
 
 class TPM(object):
-    def __init__(self, env, wallet, instrument, source, decision_var, LSS_thresh, impatience, disclosed_thresh, past_weight, memory, discount, policies, rationale):
+    def __init__(self, env, wallet, boundness_cost, instrument, source, decision_var, LSS_thresh, impatience,
+                 disclosed_thresh, past_weight, memory, discount, policies, rationale):
         self.env = env
         self.genre = 'TPM'
         self.subgenre = 'TPM'
         self.name = 'TPM'
         self.wallet = wallet
+        self.boundness_cost = boundness_cost
         self.instrument = instrument
         self.source = source
         self.decision_var = decision_var
@@ -444,10 +456,13 @@ class TPM(object):
 
         self.strikables_dict = strikable_dicting(strikables_dict)
 
+        self.LSS_tot = 0
+
         self.action = env.process(run_TPM(self.genre,
                                           self.subgenre,
                                           self.name,
                                           self.wallet,
+                                          self.boundness_cost,
                                           self.instrument,
                                           self.source,
                                           self.decision_var,
@@ -461,13 +476,15 @@ class TPM(object):
                                           self.discount,
                                           self.policies,
                                           self.rationale,
-                                          self.strikables_dict))
+                                          self.strikables_dict,
+                                          self.LSS_tot))
 
 
 def run_TPM(genre,
             subgenre,
             name,
             wallet,
+            boundness_cost,
             instrument,
             source,
             decision_var,
@@ -481,7 +498,8 @@ def run_TPM(genre,
             discount,
             policies,
             rationale,
-            strikables_dict):
+            strikables_dict,
+            LSS_tot):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, AMMORT, INSTRUMENT_TO_SOURCE_DICT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.AMMORT, config.INSTRUMENT_TO_SOURCE_DICT, config.env
 
     while True:
@@ -533,12 +551,14 @@ def run_TPM(genre,
                 firms = []
                 for _ in AGENTS[env.now - 1]:
                     i = AGENTS[env.now - 1][_]
-                    if i['genre'] == 'TP' and (i['source'] == chosen_source):
+                    if i['genre'] == 'TP' and i['Technology']['source'] == chosen_source:
                         firms.append(_)
-                if len(firms) > 0:
-                    """ we have to be certain that there are companies to be inbcentivised and now divides the possible incentive by the number of companies """
+                if len(firms) > 0 and budget>0 and value>0:
+                    """ we have to be certain that there are companies to be incentivised and now divides the possible 
+                    incentive by the number of companies """
                     # print('incentivised_firms', incentivised_firms)
-                    incentive = budget / len(firms)
+                    incentive = budget / len(
+                        firms) if instrument == 'unbound' else budget * (1 - boundness_cost) / len(firms)
                     """ and now we give out the incentives"""
                     for TP in firms:
                         code = uuid.uuid4().int
@@ -551,7 +571,7 @@ def run_TPM(genre,
                                 'value': incentive}})
                     wallet -= budget
 
-            value = disclosed_var
+            # value = disclosed_var
 
         if env.now > 2:
             add_source = source_reporting_FF(name, _past_weight)
@@ -561,7 +581,7 @@ def run_TPM(genre,
 
         #################################################################
         #                                                               #
-        #         And then, the DBB will decide what to do next         #
+        #         And then, the TPM will decide what to do next         #
         #                                                               #
         #################################################################
 
@@ -569,6 +589,7 @@ def run_TPM(genre,
             decision_var = max(0, min(1, public_deciding_FF(name)))
             disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
             decisions = evaluating_FF(name)
+            verdict = decisions['verdict']
 
         #################################################################
         #                                                               #
@@ -594,10 +615,15 @@ def run_TPM(genre,
             "discount": discount,
             "policies": policies,
             "rationale": rationale,
-            "LSS_tot": LSS_tot,
-            "Delta_LSS_1": (LSS_tot - AGENTS[env.now - 1][name]['LSS_tot']) / AGENTS[env.now - 1][name]['LSS_tot'] if (
-                        env.now > 1 and AGENTS[env.now - 1][name]['LSS_tot'] > 0) else 0
+            "current_state": current_stating_FF(_rationale),
+            "LSS_tot": LSS_tot
         }
+
+        if env.now > 1:
+            update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
+            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+        else:
+            update["LSS_weak"] = LSS_tot
 
         AGENTS[env.now][name] = update.copy()
         if env.now > 0:
@@ -607,9 +633,7 @@ def run_TPM(genre,
 
 
 class EPM(object):
-    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, dd_policy, dd_source, decision_var, dd_kappas,
-                 dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition,
-                 dd_target, dd_rationale, auction_capacity, dd_SorT):
+    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, decision_var, auction_capacity, instrument, source, LSS_thresh, impatience, disclosed_thresh, past_weight, memory, discount, policies, rationale):
         self.env = env
         self.genre = 'EPM'
         self.subgenre = 'EPM'
@@ -620,25 +644,51 @@ class EPM(object):
         self.auction_countdown = 0
         self.auction_time = False
         self.COUNTDOWN = COUNTDOWN
-        self.dd_policy = dd_policy
-        self.dd_source = dd_source
+        # self.dd_policy = dd_policy
+        # self.dd_source = dd_source
         self.decision_var = decision_var
         self.disclosed_var = decision_var
         self.verdict = 'keep'
-        self.dd_kappas = dd_kappas
-        self.dd_qual_vars = dd_qual_vars
-        self.dd_backwardness = dd_backwardness
-        self.dd_avg_time = dd_avg_time
-        self.dd_discount = dd_discount
-        self.policies = policies
-        self.dd_index = dd_index
+        # self.dd_kappas = dd_kappas
+        # self.dd_qual_vars = dd_qual_vars
+        # self.dd_backwardness = dd_backwardness
+        # self.dd_avg_time = dd_avg_time
+        # self.dd_discount = dd_discount
+        # self.policies = policies
+        # self.dd_index = dd_index
         self.index_per_source = {1: 0, 2: 0, 4: 0, 5: 0}
-        self.dd_eta = dd_eta
-        self.dd_ambition = dd_ambition
-        self.dd_target = dd_target
-        self.dd_rationale = dd_rationale
+        # self.dd_eta = dd_eta
+        # self.dd_ambition = dd_ambition
+        # self.dd_target = dd_target
+        # self.dd_rationale = dd_rationale
         self.auction_capacity = auction_capacity
-        self.dd_SorT = dd_SorT
+        # self.dd_SorT = dd_SorT
+
+        self.instrument = instrument
+        self.source = source
+
+        self.LSS_thresh = LSS_thresh
+        self.impatience = impatience
+        self.disclosed_thresh = disclosed_thresh
+        self.past_weight = past_weight
+        self.memory = memory
+        self.discount = discount
+        self.policies = policies
+        self.rationale = rationale
+
+        self.LSS_tot = 0
+        strikables_dict = {'impatience': impatience,
+                           'LSS_thresh': LSS_thresh,
+                           'source': source,
+                           'past_weight': past_weight,
+                           'memory': memory,
+                           'discount': discount,
+                           'disclosed_thresh': disclosed_thresh,
+                           'rationale': rationale,
+                           'instrument': instrument
+                           }
+
+        self.strikables_dict = strikable_dicting(strikables_dict)
 
         self.action = env.process(run_EPM(self.genre,
                                           self.subgenre,
@@ -649,25 +699,23 @@ class EPM(object):
                                           self.auction_countdown,
                                           self.auction_time,
                                           self.COUNTDOWN,
-                                          self.dd_policy,
-                                          self.dd_source,
                                           self.decision_var,
                                           self.disclosed_var,
                                           self.verdict,
-                                          self.dd_kappas,
-                                          self.dd_qual_vars,
-                                          self.dd_backwardness,
-                                          self.dd_avg_time,
-                                          self.dd_discount,
-                                          self.dd_policy,
-                                          self.dd_index,
                                           self.index_per_source,
-                                          self.dd_eta,
-                                          self.dd_ambition,
-                                          self.dd_target,
-                                          self.dd_rationale,
                                           self.auction_capacity,
-                                          self.dd_SorT))
+                                          self.instrument,
+                                          self.source,
+                                          self.LSS_thresh,
+                                          self.impatience,
+                                          self.disclosed_thresh,
+                                          self.past_weight,
+                                          self.memory,
+                                          self.discount,
+                                          self.policies,
+                                          self.rationale,
+                                          self.LSS_tot,
+                                          self.strikables_dict))
 
 
 def run_EPM(genre,
@@ -679,26 +727,25 @@ def run_EPM(genre,
             auction_countdown,
             auction_time,
             COUNTDOWN,
-            dd_policy,
-            dd_source,
             decision_var,
             disclosed_var,
             verdict,
-            dd_kappas,
-            dd_qual_vars,
-            dd_backwardness,
-            dd_avg_time,
-            dd_discount,
-            policies,
-            dd_index,
             index_per_source,
-            dd_eta,
-            dd_ambition,
-            dd_target,
-            dd_rationale,
             auction_capacity,
-            dd_SorT):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, DEMAND, M_CONTRACT_LIMIT, AUCTION_WANTED_SOURCES, AMMORT, TACTIC_DISCOUNT, INSTRUMENT_TO_SOURCE_DICT, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.DEMAND, config.M_CONTRACT_LIMIT, config.AUCTION_WANTED_SOURCES, config.AMMORT, config.TACTIC_DISCOUNT, config.INSTRUMENT_TO_SOURCE_DICT, config.MARGIN, config.env  # globals
+            instrument,
+            source,
+            LSS_thresh,
+            impatience,
+            disclosed_thresh,
+            past_weight,
+            memory,
+            discount,
+            policies,
+            rationale,
+            LSS_tot,
+            strikables_dict):
+
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, DEMAND, AUCTION_WANTED_SOURCES, AMMORT, INSTRUMENT_TO_SOURCE_DICT, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.DEMAND, config.AUCTION_WANTED_SOURCES, config.AMMORT, config.INSTRUMENT_TO_SOURCE_DICT, config.MARGIN, config.env  # globals
 
     while True:
 
@@ -709,67 +756,16 @@ def run_EPM(genre,
         #                                                               #
         #################################################################
 
-        list_of_strikables = [dd_policy, dd_source, dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time,
-                              dd_discount, dd_policy, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale]
-
-        policy = dd_policy['current']
-        source = dd_source['current']
-        kappa = dd_kappas['current']
-        backwardness = dd_backwardness['current']
-        avg_time = dd_avg_time['current']
-        discount = dd_discount['current']
-        index = indexing_FF('EPM') if env.now > 0 else dd_index['current']
-        eta_acc = dd_eta['current']
-        ambition = dd_ambition['current']
-        rationale = dd_rationale['current']
+        _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
+        _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
+        _source = list(source[0].keys())[0] if env.now == 0 else list(AGENTS[env.now - 1][name]['source'][0].keys())[0]
+        _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
+        _memory = memory[0] if env.now == 0 else AGENTS[env.now - 1][name]['memory'][0]
+        _discount = discount[0] if env.now == 0 else AGENTS[env.now - 1][name]['discount'][0]
+        _disclosed_thresh = disclosed_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['disclosed_thresh'][0]
+        _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
+        _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
         value = disclosed_var
-
-        if env.now > 0 and (verdict == 'add' or 'change'):
-            striked = striking_FF(list_of_strikables, kappa)  # with this we have a different list of strikables
-
-            for entry in range(0, len(list_of_strikables)):
-
-                if list_of_strikables[entry]['current'] == striked[entry]:
-                    # that dictionary was not the changed one, so we can just update it
-                    list_of_strikables[entry] = striked[entry]
-
-                else:
-                    # alright, that was the one that changed
-
-                    policies = policymaking_FF(striked[entry], policies,
-                                               disclosed_var) if verdict == 'change' else policymaking_FF(
-                        striked[entry], policies, disclosed_var, add=True)
-
-            verdict = 'keep'  # we already changed, now back to business
-
-            """ 
-            now, we contract molecule projects
-            """
-
-            """possible_projects = []
-            demand = DEMAND.copy()[env.now]['M']"""
-            """ since molecule projects are take of pay, if they are not contracted, then demand make contract them"""
-            """for _ in MIX[env.now]:
-                j = MIX[env.now][_]
-                if j['status'] != 'contracted' and j['EorM'] == 'M' and j['M_limit'] != env.now:
-                    possible_projects.append(j)
-                elif j['status'] == 'contracted' and j['EorM'] == 'M' and j['M_limit'] == env.now:
-                    j.update({'status': 'uncontracted'})
-                    demand -= j['MWh']"""
-
-            """ this time, we sort by price, as the prices are defined by the agents """
-            """possible_projects = sorted(possible_projects, key=lambda x: (x['price']))
-            for plant in possible_projects:
-                if demand < 0:
-                    MIX[env.now][plant['code']].update({
-                        'status': 'uncontracted'
-                    })
-                else:
-                    MIX[env.now][plant['code']].update({
-                        'status': 'contracted',
-                        'M_limit': env.now + 1 + M_CONTRACT_LIMIT
-                    })
-                demand -= plant['MWh']"""
 
         #################################################################
         #                                                               #
@@ -777,111 +773,129 @@ def run_EPM(genre,
         #                                                               #
         #################################################################
 
-        policy_pool = [{'instrument': instrument,
+        policy_pool = [{'instrument': _instrument,
                         'source': _source,
-                        'budget': value * wallet}]
+                        'budget': value * wallet,
+                        'entry_value': value}]
 
-        if env.now >= 2:
+        if len(policies) > 0:
+            policy_pool.append(policies)  # with this we create a temporary list with first the current policy and
+            # afterwards all the other policies
+
+        if env.now >= 1:
             for entry in policy_pool:
-                instrument = entry['instrument']
-                source = entry['source']
-                budget = entry['budget'] if 'budget' in entry else value * wallet
-                value = disclosed_var if 'value' not in entry else entry['value']
 
-                if instrument == 'carbon_tax':
+                entry_instrument = entry['instrument']
+                entry_chosen_source = entry['source']
+                budget = entry['budget']
+                entry_value = entry['entry_value']
+
+                if entry_instrument == 'carbon_tax':
                     """
                     CARBON-TAX
                     """
 
                     for _ in TECHNOLOGIC[0]:
                         i = TECHNOLOGIC[0][_]
-                        j = TECHNOLOGIC[env.now + 1][_]
-                        """ for the carbon-tax, if the source is thermal (0) or natural gas (3), then, its OPEX gets higher"""
-                        if i['source'] in [0, 3] and value != AGENTS[env.now - 1]['EPM']['decision_var']:
-                            j.update({
-                                'OPEX': i['OPEX'] * (1 + value)
-                            })
-                            """ we can update in relation to the initial value, because there is no innovation for non-renewables"""
+                        j = TECHNOLOGIC[env.now][_]
+                        """ for the carbon-tax, if the source is thermal (0) or natural gas (3), then, its OPEX gets
+                         higher"""
+                        if i['source'] == 0:
+                            j['OPEX'] = i['OPEX'] * (1 + entry_value)
+                            """ we can update in relation to the initial value, because there is no innovation for
+                             non-renewables"""
 
-                elif instrument == 'FiT':
+                elif entry_instrument == 'FiT':
                     """
                     Feed-in Tariff
                     """
 
                     """ we are actually using Feed-in premium, since we are adding a payment to the market price"""
-                    for _ in MIX[env.now - 1]:
-                        i = MIX[env.now - 1][_]
-                        if i['source'] in INSTRUMENT_TO_SOURCE_DICT(source) and i['auction_contracted'] != True:
-                            i.update({
-                                'price': i['price'] * (1 + value)
-                            })
+                    for _ in MIX[env.now]:
+                        i = MIX[env.now][_]
+                        if i['source'] == entry_chosen_source and i['auction_contracted'] is not True:
+                            i['price'] = i['price'] * (1 + entry_value)
 
-                else:
+                elif entry_instrument == 'auction':
                     """
                     Auctions: these are a little bit more complicated
                     """
 
-                    """ we do things with auction_countdown, which is a countdown for the auction period, which allows the EPM to collect projhects, and with auction_time, a boolean variable which signals if there is an auction underway"""
-                    if auction_countdown > 0 and auction_time == True:
-                        """ if the coundtdown has yet to reach zero but an Auction is underway, then we cut down one period from the auction_countdown """
+                    """ we do things with auction_countdown, which is a countdown for the auction period, which allows
+                     the EPM to collect projects, and with auction_time, a boolean variable which signals if there is
+                      an auction underway"""
+
+                    if auction_countdown > 0 and auction_time is True:
+                        """ if the countdown has yet to reach zero but an Auction is underway, then we cut down one
+                         period from the auction_countdown """
                         auction_countdown -= 1
-                    elif auction_time == False:
-                        """ if we are doing an auction, but the auction_time is not signalling that an auction is underway, then we have to set it to true and trigger the countdown to the auction itself"""
+                    elif auction_time is False:
+                        """ if we are doing an auction, but the auction_time is not signalling that an auction is 
+                        underway, then we have to set it to true and trigger the countdown to the auction itself"""
                         auction_countdown = COUNTDOWN
                         auction_time = True
-                        for j in range(env.now, env.now + COUNTDOWN):
-                            """ as we starting the auction, we need to signal energy producers that their next projects of the target-source will be put inside the auction, for that we set up bids for each energy producer for each period from now until the deadline. This process creates bids for new agents also"""
-                            for source in INSTRUMENT_TO_SOURCE_DICT[source]:
-                                AUCTION_WANTED_SOURCES.append(INSTRUMENT_TO_SOURCE_DICT[source])
+                        AUCTION_WANTED_SOURCES.append(entry_chosen_source)
+                        # ic(AUCTION_WANTED_SOURCES)
+
                     elif auction_countdown == 0 and auction_time == True:
-                        """ under these circumnstances, it is time to do the auction and contract projects for the ppas"""
+                        """ under these circumstances, it is time to do the auction and contract projects for the 
+                        ppas"""
                         auction_time = False
                         possible_projects = []
                         contracted_projects = []
-                        for source in INSTRUMENT_TO_SOURCE_DICT[source]:
-                            AUCTION_WANTED_SOURCES.remove(INSTRUMENT_TO_SOURCE_DICT[source])
+
+                        AUCTION_WANTED_SOURCES = []
+
                         """first we get the projects that were bidded"""
                         for i in range(env.now - COUNTDOWN, env.now - 1):
                             for _ in CONTRACTS[i]:
                                 __ = CONTRACTS[i][_]
                                 j = __.copy()
-                                if j['bidded'] == True:
+                                if j['receiver'] == name:
                                     """ here we are adding the whole contract"""
                                     possible_projects.append(j)
                         """ we have to sort in terms of 'OPEX' """
-                        possible_projects = sorted(possible_projects, key=lambda x: x['OPEX'])
+                        possible_projects = sorted(possible_projects, key=lambda x: x['price'])
                         """ the capacity for auction is the value (in GW) multplied by 1000 (to become MW)"""
-                        remaining_capacity = auction_capacity * value * 1000
-                        for i in possible_projects:
+                        remaining_capacity = auction_capacity * entry_value * 1000
+                        for project in possible_projects:
                             if remaining_capacity > 0:
                                 """ if there is still capacity to contract, then the project is contracted"""
-                                contracted_projects.append(i['code'])
-                            remaining_capacity -= i['capacity']
-                        """ then we cycle throught the codes of the contracted projects in order to tell the proponent agents that their projects were contracted"""
-                        for code in contracted_projects:
-                            """ first we update it to include attributes exclusive to PPAs, such as the auction price, the boolean auction_contracted and the date of expiration of the price"""
-                            CONTRACTS[env.now].update({code: {
+                                contracted_projects.append(project)
+                            remaining_capacity -= project['capacity']
+                        """ then we cycle throught the codes of the contracted projects in order to tell the proponent 
+                        agents that their projects were contracted"""
+                        for project in contracted_projects:
+                            """ first we update it to include attributes exclusive to PPAs, such as the auction price, 
+                            the boolean auction_contracted and the date of expiration of the price"""
+                            code = project['code']
+                            project['receiver'] = project['sender'] # we have to switch them
+                            """if math.isnan(price) is True:
+                                print(project)
+                                print(price, project['OPEX'], project['CAPEX'], project['lifetime'], MARGIN, project['MWh'])
+                                print('check this out', math.isnan(project['OPEX']), math.isnan(project['CAPEX']), math.isnan(project['lifetime']), math.isnan(MARGIN), math.isnan(project['MWh']))"""
+                            project_update = {
                                 'status': 'project',
-                                'price': (possible_projects[i]['OPEX'] + (
-                                        possible_projects[i]['CAPEX'] / possible_projects[i]['lifetime'])) * (
-                                                 1 + MARGIN) / possible_projects[i]['MWh'],
                                 'auction_contracted': True,
                                 'price_expiration': env.now + PPA_expiration + PPA_limit + 1,
-                                'limit': env.now + PPA_limit + 1
-                            }})
+                                'limit': env.now + PPA_limit + 1,
+                                'sender': 'EPM'
+                            }
 
-                        """ lastly, we have to get rid of the contracted projects. This is relevant specially when  there are multiple auctions happening"""
-                        for i in range(env.now - 1 - COUNTDOWN, env.now - 1):
+                            project.update(project_update)
+
+                            # ic(project)
+
+                            CONTRACTS[env.now][code] = project
+
+                        # TODO: check if this is necessary
+                        """ lastly, we have to get rid of the contracted projects. This is relevant specially when  
+                        there are multiple auctions happening"""
+                        """ for i in range(env.now - 1 - COUNTDOWN, env.now - 1):
                             for _ in CONTRACTS[i]:
                                 j = CONTRACTS[i][_]
                                 if j['code'] in contracted_projects:
-                                    j.update('bidded' == False)
-
-            """ and now back to the actual variables for the current policy"""
-
-            instrument = policies[0]['instrument']
-            source = policies[0]['source']
-            value = disclosed_var
+                                    j.update('bidded' == False)"""
 
         #################################################################
         #                                                               #
@@ -890,11 +904,11 @@ def run_EPM(genre,
         #                                                               #
         #################################################################
 
-        add_source = source_reporting_FF(name)
-
-        for entry in dd_source['ranks']:
-            dd_source['ranks'][entry] *= (1 - discount)
-            dd_source['ranks'][entry] += add_source[entry]
+        if env.now > 2:
+            add_source = source_reporting_FF(name, _past_weight)
+            for entry in range(len(source) - 1):
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+                source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
         #################################################################
         #                                                               #
@@ -904,9 +918,8 @@ def run_EPM(genre,
 
         if env.now > 0:
             decision_var = max(0, min(1, public_deciding_FF(name)))
-            disclosed_var = thresholding_FF(kappa, disclosed_var, decision_var)
+            disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
             decisions = evaluating_FF(name)
-
             verdict = decisions['verdict']
 
         #################################################################
@@ -915,7 +928,7 @@ def run_EPM(genre,
         #                                                               #
         #################################################################
 
-        AGENTS[env.now].update({name: {
+        update = {
             "genre": genre,
             "subgenre": subgenre,
             "name": name,
@@ -925,27 +938,33 @@ def run_EPM(genre,
             "auction_countdown": auction_countdown,
             "auction_time": auction_time,
             "COUNTDOWN": COUNTDOWN,
-            "dd_policy": dd_policy,
-            "dd_source": dd_source,
             "decision_var": decision_var,
             "disclosed_var": disclosed_var,
             "verdict": verdict,
-            "dd_kappas": dd_kappas,
-            "dd_qual_vars": dd_qual_vars,
-            "dd_backwardness": dd_backwardness,
-            "dd_avg_time": dd_avg_time,
-            "dd_discount": dd_discount,
-            "policies": policies,
-            "dd_index": dd_index,
             "index_per_source": index_per_source,
-            "dd_eta": dd_eta,
-            "dd_ambition": dd_ambition,
-            "dd_target": dd_target,
-            "dd_rationale": dd_rationale,
             "auction_capacity": auction_capacity,
             "instrument": instrument,
             "source": source,
-        }})
+            "LSS_thresh": LSS_thresh,
+            "impatience": impatience,
+            "disclosed_thresh": disclosed_thresh,
+            "past_weight": past_weight,
+            "memory": memory,
+            "discount": discount,
+            "policies": policies,
+            "rationale": rationale,
+            "LSS_tot": LSS_tot,
+            "strikables_dict": strikables_dict,
+            "current_state": current_stating_FF(_rationale)
+        }
+
+        if env.now > 1:
+            update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
+            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+        else:
+            update["LSS_weak"] = LSS_tot
+
+        AGENTS[env.now][name] = update.copy()
         if env.now > 0:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
@@ -953,7 +972,7 @@ def run_EPM(genre,
 
 
 class DBB(object):
-    def __init__(self, env, wallet, instrument, source, decision_var, LSS_thresh, past_weight,
+    def __init__(self, env, name, wallet, instrument, source, decision_var, LSS_thresh, past_weight,
                  memory, discount, policies, impatience, disclosed_thresh, rationale):
         # Pre-Q:
         # self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
@@ -965,7 +984,7 @@ class DBB(object):
         self.NPV_THRESHOLD_DBB = config.NPV_THRESHOLD_DBB
         self.guaranteed_contracts = []
         self.genre = 'DBB'
-        self.name = 'DBB'
+        self.name = name
         self.wallet = wallet
         self.instrument = instrument
         self.source = source
@@ -1194,6 +1213,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             decision_var = max(0, min(1, public_deciding_FF(name)))
             disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
             decisions = evaluating_FF(name)
+            verdict = decisions['verdict']
             # print('strikes are', decisions['strikes'])
 
         #################################################################
@@ -1226,12 +1246,13 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "car_ratio": car_ratio,
             "strikables_dict": strikables_dict,
             "current_state": current_stating_FF(_rationale),
-            "LSS_tot": LSS_tot
+            "LSS_tot": LSS_tot,
+            "interest_rate": 1+r-disclosed_var
         }
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = AGENTS[env.now - 1][name]['LSS_weak'] + decision_var - AGENTS[env.now - 1][name]['decision_var']
+            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
         else:
             update["LSS_weak"] = LSS_tot
 
@@ -1243,6 +1264,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
 
 
 class BB(object):
+    # TODO: all the BB...
     def __init__(self, env, Portfolio, accepted_sources, name, wallet, dd_source, decision_var, dd_kappas, dd_qual_vars,
                  dd_backwardness, dd_avg_time, dd_discount, dd_strategies, dd_index):
         self.env = env
@@ -1451,6 +1473,7 @@ def run_BB(NPV_THRESHOLD_DBB,
             "strategy": strategy,
             "index": index,
             "value": value,
+            "interest_rate": 1 + r + decision_var
         }})
 
         profits_dedicting_FF(name)
@@ -1515,6 +1538,7 @@ class EP(object):
 
         self.LSS_tot = 0
         self.shareholder_money = 0
+        self.reinvest = True
 
         self.action = env.process(run_EP(self.env,
                                          self.genre,
@@ -1539,7 +1563,8 @@ class EP(object):
                                          self.profits,
                                          self.dd_profits,
                                          self.LSS_tot,
-                                         self.shareholder_money))
+                                         self.shareholder_money,
+                                         self.reinvest))
 
 
 def run_EP(env,
@@ -1565,8 +1590,9 @@ def run_EP(env,
            profits,
            dd_profits,
            LSS_tot,
-           shareholder_money):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, BB_NAME_LIST, AGENTS_r, MIX_EXPANSION, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.BB_NAME_LIST, config.AGENTS_r, config.MIX_EXPANSION, config.env
+           shareholder_money,
+           reinvest):
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, AMMORT, AUCTION_WANTED_SOURCES, AGENTS_r, EP_NUMBER, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.AMMORT, config.AUCTION_WANTED_SOURCES, config.AGENTS_r, config.EP_NUMBER, config.env
 
     while True:
 
@@ -1602,13 +1628,17 @@ def run_EP(env,
             """ Moreover, if the plant was activated, then the EP pays the OPEX of it """
             for _ in MIX[env.now - 1]:
                 """ Then we check each plant in the mix """
-                i = MIX[env.now - 1][_]
+                i = MIX[env.now - 1][_].copy()
                 """ the _ is the code of the plant, whereas i is the dictionary of the plant itself """
                 if i['EP'] == name and i['status'] == 'contracted':
                     """ if the plant is mine and it is contracted, I'll collect profits """
-                    wallet += i['MWh'] * i['price'] - i['OPEX']
-                    profits += i['MWh'] * i['price'] - i['OPEX']
-                    dd_profits[i['source']] += i['MWh'] * i['price'] - i['OPEX']
+                    addition = i['MWh'] * i['price'] - i['OPEX']
+                    wallet += addition
+                    profits += addition
+                    """if math.isnan(i['MWh'] * i['price'] - i['OPEX']) is True:
+                        print(name, math.isnan(i['MWh']), math.isnan(i['price']), math.isnan(i['OPEX']))
+                        print(i)"""
+                    dd_profits[i['source']] += addition
 
                     """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the 
                     policy makers, other EPs and the demand to do some calculations """
@@ -1656,7 +1686,8 @@ def run_EP(env,
                 """  1) we pay for the ammortization of plants """
 
                 if i['ammortisation'] > env.now and (
-                        i['guarantee'] != True or (i['guarantee'] == True and wallet >= number)):
+                        i['guarantee'] is not True or (i['guarantee'] is True and wallet >= number)
+                ) and i['BB'] != 'reinvestment':
                     """ if the plant is not guaranteed or if it's guaranteed but the EP has enough money to cover it """
                     wallet -= number
 
@@ -1713,17 +1744,16 @@ def run_EP(env,
                 if i['receiver'] == name and i['status'] == 'financed':
                     """ the project was financed """
                     last_acquisition_period = env.now
-                    j = i.copy()
-                    j.update({
+                    jj = i.copy()
+                    jj.update({
                         'EP': name,
-                        'BB': j['sender'],
-                        'code': _,
+                        'BB': jj['sender'],
                         'status': 'building',
-                        'principal': j['CAPEX'] * (1 + r) ** j['building_time'],
-                        'completion': j['building_time'] + 1 + env.now,
-                        'retirement': j['lifetime'] + j['building_time'] + 1 + env.now
+                        'principal': jj['CAPEX'] * (1 + r) ** jj['building_time'],
+                        'completion': jj['building_time'] + 1 + env.now,
+                        'retirement': jj['lifetime'] + jj['building_time'] + 1 + env.now
                     })
-                    print(name, 'found its project', j, 'financed at time', env.now)
+                    # print(name, 'found its project', jj, 'financed at time', env.now, 'by the bank', jj['BB'])
 
                     """ moreover, if it is a molecule project,
                     the price is pre-fixed """
@@ -1734,92 +1764,66 @@ def run_EP(env,
                     # j.pop('receiver')
                     # j.pop('sender')
 
-                    portfolio_of_plants[_] = j.copy()
-                    # print('portfolio_of_plants.update({_ : j})', _, j)
+                    portfolio_of_plants[_] = jj.copy()
+                    # print('portfolio_of_plants.update({_ : jj})', _, jj)
                     # capacity[i['source']] = capacity[i['source']] + i['capacity']
 
                     """ if the financed project was in the pool of projects of the EP, we have to take it out """
-                    """if _ in portfolio_of_projects:
-                        portfolio_of_projects.pop(_)"""
+                    if _ in portfolio_of_projects:
+                        # print('popped ', _, 'from the portfolio of projects of ', name, ' being financed by', jj['sender'])
+                        portfolio_of_projects.pop(_)
 
                     """ now we ready the contract that tells the TP that he got a new project"""
                     code = uuid.uuid4().int
                     CONTRACTS[env.now].update({
                         code: {'sender': name,
-                               'receiver': j['TP'],
+                               'receiver': jj['TP'],
                                'status': 'payment',
-                               'source': j['source'],
-                               'value': j['CAPEX'],
-                               'MWh': i['MWh']
+                               'source': jj['source'],
+                               'value': jj['CAPEX'],
+                               'MWh': jj['MWh']
                                }
                     })
-                    """elif (i['guarantee'] == True or i['auction_contracted'] == True) and i['receiver'] == name and i['status'] == 'project' and 'failed_attempts' not in i:
-                    # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be 
+                elif ('guarantee' in i or 'auction_contracted' in i) and name == (i['receiver'] or i['sender']) and i[
+                    'status'] == 'project':
+                    # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be
                     # inserted into the portfolio_of_projects dictionary
                     j = i.copy()
                     j.update({'code': _})
                     if 'limit' not in j:
-                        #if the key 'limit' is not in j, then we insert it, as well as the list failed_attempts, in 
+                        # if the key 'limit' is not in j, then we insert it, as well as the list failed_attempts, in
                         # which we put the name of the banks that rejected the project
-                        j['limit'], j['failed_attempts'] = env.now + _tolerance, [i['receiver']]
-                    portfolio_of_projects.update({_: j})"""
-                elif i['receiver'] == name and i['status'] == 'rejected' and i['CAPEX'] <= wallet:
-                    j = i.copy()
-                    """ if no one accepts to finance and the EP has enough money, it can pay for the plant itself"""
-                    print(name, 'has just reinvested')
-                    wallet -= j['CAPEX']
-                    """if _ in portfolio_of_projects:
-                        portfolio_of_projects.pop(j['code'])"""
-                    code = uuid.uuid4().int
-                    last_acquisition_period = env.now
-                    k = i.copy()
-                    k.update({
-                        'EP': name,
-                        'BB': 'reinvestment',
-                        'code': code,
-                        'status': 'building',
-                        'principal': 0,
-                        'completion': k['building_time'] + 1 + env.now,
-                        'retirement': k['lifetime'] + k['building_time'] + 1 + env.now
-                    })
-                    """ moreover, if it is a molecule project, the price is pre-fixed """
-                    """if i['EorM'] == 'M':
-                        k.update({'price': (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) * decision_var})
-                    portfolio_of_plants.update({code: k})
-                    capacity.update({k['source']: capacity[k['source']] + k['capacity']})"""
-
-                    code = uuid.uuid4().int
-                    CONTRACTS[env.now].update({
-                        code:
-                            {'sender': name,
-                             'receiver': k['TP'],
-                             'status': 'payment',
-                             'source': k['source'],
-                             'value': k['CAPEX'],
-                             'MWh': k['MWh']
-                             }
-                    })
-                """elif _ in portfolio_of_projects and i['sender'] == name and i[
-                    'status'] == 'rejected' and i['limit'] > env.now and i['CAPEX'] > wallet:
-                    # if not, then we take that project from the pool
-                    portfolio_of_projects.pop(i)
-                elif _ in portfolio_of_projects and i['sender'] == name and i['status'] == 'rejected' and i[
-                    'limit'] < env.now:
-                    portfolio_of_projects[i['code']].update({
-                        'failed_attempts': i['failed_attempts'].append(
-                            i['receiver']
-                        )})"""
+                        j['limit'], j['failed_attempts'] = env.now + 1 + _tolerance, [i['receiver']]
+                    # print(_, 'added to the portfolio of projects')
+                    portfolio_of_projects.update({_: j})
 
         #############################################################
         #                                                           #
         #   Then, the Energy producer decides how much to invest    #
         #                                                           #
         #############################################################
+        if env.now > 0 and env.now % periodicity == 0:
+            # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
+            if AGENTS[env.now-1]['DD']['Remaining_demand'] > 0:
+                condition = True
+            else:
+                condition = value > 0
+        else:
+            condition = False
 
-        if env.now % periodicity == 0 and env.now > 1 and value > 0:  # and wallet > 0:
+        if condition is True:  # and wallet > 0:
             # print(name, 'is trying to increase its capacity')
-            # ic(value, MIX_EXPANSION, value * MIX_EXPANSION)
-            TP = {'TP': 0,
+            if AGENTS[env.now - 1]['DD']['Remaining_demand'] > 0:
+                mix_expansion = AGENTS[env.now - 1]['DD']['Remaining_demand'] / (24 * 30 * EP_NUMBER)  # the demand is
+                # in mwh, but the expansion is in MW
+            else:
+                mix_expansion = config.INITIAL_DEMAND/EP_NUMBER
+                mix_expansion *= value
+
+            # print(mix_expansion)
+
+            # print(EP_NUMBER)
+            _TP = {'TP': 0,
                   'NPV': False,
                   'Lumps': 0,
                   'CAPEX': 0,
@@ -1829,12 +1833,12 @@ def run_EP(env,
                 i = TECHNOLOGIC[env.now - 1][_]
                 if i['source'] == _source:
                     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
-                    Lumps = np.ceil((value * MIX_EXPANSION) / i['MW'])
+                    Lumps = np.ceil(mix_expansion / i['MW'])
                     price = source_price[i['source']]
                     NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'],
                                             i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
-                    if NPV > TP['NPV'] or TP['NPV'] is False:
-                        TP.update({
+                    if NPV > _TP['NPV'] or _TP['NPV'] is False:
+                        _TP.update({
                             'TP': _,
                             'NPV': NPV,
                             'Lumps': Lumps,
@@ -1848,75 +1852,102 @@ def run_EP(env,
             else:
                 """ if the source is not currently in an auction, the EP sends it directly to a bank"""
                 """ now we select which bank to try """
-                BB_ = []
-                for _ in AGENTS[env.now - 1]:
-                    """ we must check at this period, because the EP goes after the bank """
-                    agent = AGENTS[env.now - 1][_]
-                    if agent['genre'] == 'BB':
-                        BB_.append([agent['name'], agent['decision_var']])
-                    elif agent['genre'] == 'DBB':
-                        BB_.append([agent['name'], agent['disclosed_var']])
-                number = np.random.poisson(1)
-                # print(BB_)
-                number = number if number < len(BB_) else len(BB_) - 1
-                _BB = sorted(BB_, key=lambda x: x[1])[number][0]
-                # first we sort the list of agents. With the .values() we have both keys and values. The [number]
-                # selects the random pick of which source to get. The ['name'] selects the name of the bank
-                receiver = _BB
+
+                receiver = bank_sending_FF()
+
 
             # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the
             # whole project
             # ic(TP['TP'], name, _source) if TP['TP'] == 0 else None
-            project = TECHNOLOGIC[env.now - 1][TP['TP']].copy()
+            project = TECHNOLOGIC[env.now - 1][_TP['TP']].copy()
             # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
             project.update({
                 'sender': name,
                 'receiver': receiver,
-                'TP': TP['TP'],
-                'Lumps': TP['Lumps'],
-                'old_CAPEX': TECHNOLOGIC[env.now - 1][TP['TP']]['CAPEX'],
-                'old_OPEX': TECHNOLOGIC[env.now - 1][TP['TP']]['OPEX'],
-                'CAPEX': TP['CAPEX'],
-                'OPEX': TP['OPEX'],
+                'TP': _TP['TP'],
+                'Lumps': _TP['Lumps'],
+                'old_CAPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['CAPEX'],
+                'old_OPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['OPEX'],
+                'CAPEX': _TP['CAPEX'],
+                'OPEX': _TP['OPEX'],
                 'status': 'project',
-                'capacity': TP['Lumps'] * project['MW'],
-                'MWh': TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
-                'avoided_emissions': TECHNOLOGIC[env.now - 1][TP['TP']]['avoided_emissions'] * TP['Lumps'],
-                'emissions': TECHNOLOGIC[env.now - 1][TP['TP']]['emissions'] * TP['Lumps'],
+                'capacity': _TP['Lumps'] * project['MW'],
+                'MWh': _TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
+                'avoided_emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['avoided_emissions'] * _TP['Lumps'],
+                'emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['emissions'] * _TP['Lumps'],
                 'guarantee': False
             })
             if _source in AUCTION_WANTED_SOURCES:
                 project.update(
                     {'status': 'bidded',
+                     'price': (
+                                      project['OPEX'] + (project['CAPEX'] / project['lifetime'])
+                              ) * (2 + config.MARGIN - value) / project['MWh'],
                      'receiver': 'EPM'})
             else:
                 project['status'] = 'project'
                 project['auction_contracted'] = False
             code = uuid.uuid4().int
+            project['code'] = code
             CONTRACTS[env.now][code] = project
+            # ic(name, project)
 
+        # print(portfolio_of_projects, name)
+
+        _to_pop = []
         for _ in portfolio_of_projects:
             """ now we have to resend the "projects in the portfolio_of_projects dictionary """
             i = portfolio_of_projects[_].copy()
-            number = np.random.poisson(1)
-            BB_list = []
-            for j in sorted(list(AGENTS[env.now - 1].values()), key=lambda x: x['financing_index'][i['source']],
-                            reverse=True):
-                BB_list.append(j['name'])
-            for bank in i['failed_attempts']:
-                BB_list.remove(bank)
-            if len(BB_list) > 0 and number < len(BB_list):
-                _BB = BB_list[number]
-            else:
-                _BB = BB_list[-1] if len(BB_list) > 0 else random.choice(
-                    BB_NAME_LIST)  # if there are items in the list, it chooses the last one, if not, it simply chooses randomly from the possible banks
-            project = i.copy()
-            project.update({'sender': name,
-                            'receiver': _BB,
-                            'status': 'project'})
-            CONTRACTS[env.now].update({
-                project['code']: project
-            })
+
+            if i['limit'] == env.now:
+                # print('project ', _, ' has reached its limit time...')
+                _to_pop.append(_)
+
+            elif i['CAPEX'] > wallet:
+                receiver = bank_sending_FF()
+                project = i.copy()
+                project.update({'sender': name,
+                                'receiver': receiver,
+                                'status': 'project'})
+                CONTRACTS[env.now].update({
+                    _: project
+                })
+            elif i['CAPEX'] < wallet and reinvest is True:
+                # print(name, 'has just reinvested, and this is the status', i['status'])
+                wallet -= i['CAPEX']
+                code = _  # uuid.uuid4().int
+                # print(_)
+                _to_pop.append(_)
+                last_acquisition_period = env.now
+                project = i.copy()
+                project.update({
+                    'EP': name,
+                    'BB': 'reinvestment',
+                    'sender': 'reinvestment',
+                    'receiver': name,
+                    'status': 'financed',
+                    'principal': 0,
+                    'completion': project['building_time'] + 1 + env.now,
+                    'retirement': project['lifetime'] + project['building_time'] + 1 + env.now,
+                    'ammortisation': env.now
+                })
+                CONTRACTS[env.now][_] = project
+                last_acquisition_period = env.now
+                # code = uuid.uuid4().int
+                """CONTRACTS[env.now].update({
+                    code:
+                        {'sender': name,
+                         'receiver': k['TP'],
+                         'status': 'payment',
+                         'source': k['source'],
+                         'value': k['CAPEX'],
+                         'MWh': k['MWh']
+                         }
+                })"""
+
+        if len(_to_pop) > 0:
+            for code in _to_pop:
+                portfolio_of_projects.pop(code)
 
         #################################################################
         #                                                               #
@@ -1939,6 +1970,7 @@ def run_EP(env,
         if env.now > 0:
             decision_var = max(0, min(1, private_deciding_FF(name)))
             decisions = evaluating_FF(name)
+            verdict = decisions['verdict']
 
         #############################################################
         #                                                           #
@@ -1971,11 +2003,12 @@ def run_EP(env,
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = AGENTS[env.now - 1][name]['LSS_weak'] + decision_var if decision_var != AGENTS[env.now - 1][name]['decision_var'] else AGENTS[env.now - 1][name]['LSS_weak']
+            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
         else:
             update["LSS_weak"] = LSS_tot
 
         AGENTS[env.now][name] = update.copy()
+
         if env.now > 0:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
             profits_dedicting_FF(name)
@@ -1991,12 +2024,16 @@ class Demand(object):
         self.initial_demand = initial_demand
         self.when = when
         self.increase = increase
+        self.Demand_by_source = {0: 0, 1:0, 2:0}
+        self._Price = 0
         self.action = env.process(run_DD(self.env,
                                          self.genre,
                                          self.name,
                                          self.initial_demand,
                                          self.when,
-                                         self.increase))
+                                         self.increase,
+                                         self.Demand_by_source,
+                                         self._Price))
 
 
 def run_DD(env,
@@ -2004,8 +2041,11 @@ def run_DD(env,
            name,
            initial_demand,
            when,
-           increase):
-    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN, MIX_EXPANSION, EP_NAME_LIST, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.MIX_EXPANSION, config.EP_NAME_LIST, config.env
+           increase,
+           Demand_by_source,
+           _Price
+           ):
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN,  EP_NUMBER, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.EP_NUMBER, config.env
 
     while True:
 
@@ -2026,7 +2066,7 @@ def run_DD(env,
 
         if env.now == 0:
             DEMAND.update({env.now: initial_demand})
-            printable = 'initial seed is ' + str(config.seed)
+            printable = 'seed is ' + str(config.seed)
             print(printable)
 
         elif env.now % when == 0:
@@ -2061,6 +2101,7 @@ def run_DD(env,
             DEMAND.update({env.now: DEMAND[env.now - 1]})
 
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
+        demand = DEMAND.copy()[env.now] * 24 * 30
         if env.now > 0 and len(MIX[env.now]) > 0:
             """ 
             First, we contract and precify the electricity projects
@@ -2075,8 +2116,7 @@ def run_DD(env,
             """ now, we sort the list of dictionaries in terms of dispatchability and then OPEX (respecting the merit order)"""
             possible_projects = sorted(possible_projects, key=lambda x: (x['dispatchable'], x['OPEX']))
             chosen = []
-            demand = DEMAND.copy()[env.now] * 24 * 30
-            print('full demand is ', demand)
+            # print('full demand is ', demand)
             for plant in possible_projects:
                 if demand < 0:
                     """ if there is no more demand to be supplied, then the plant is not contracted"""
@@ -2091,25 +2131,27 @@ def run_DD(env,
                     })
                     chosen.append(plant)
                     demand -= plant['MWh']
+                    Demand_by_source[plant['source']] += plant['MWh']
                     # print('demand decrease by', plant['MWh'])
             """ following the merit order, the system is precified in relation to its most costly unit"""
-            chosen = sorted(chosen, key=lambda x: x['OPEX'])[-1]
-            price = (chosen['OPEX'] + (chosen['CAPEX'] / chosen['lifetime'])) * (1 + MARGIN) / chosen['MWh']
+            chosen_plant = sorted(chosen, key=lambda x: x['OPEX'])[-1]
+            price = (
+                            chosen_plant['OPEX'] + (chosen_plant['CAPEX'] / chosen_plant['lifetime'])
+                     ) * (1 + MARGIN) / chosen_plant['MWh']
             for i in possible_projects:
                 """ if the plant is auction contracted, then we do not mess with its price"""
-                if i['auction_contracted'] != True:
+                if 'auction_contracted' not in i:
                     MIX[env.now][i['code']].update({
                         'price': price})
 
-            if demand > 0:
-                MIX_EXPANSION += demand/len(EP_NAME_LIST)
-            else:
-                MIX_EXPANSION = config.INITIAL_DEMAND/len(EP_NAME_LIST)
+            _Price = weighting_FF(env.now, 'price', 'MWh', MIX) if len(MIX[env.now]) > 0 else config.STARTING_PRICE
 
-            AGENTS[env.now][name] = {
-                'name': name,
-                'genre': 'DD',
-                'Demand': DEMAND[env.now],
-                'Remaining_demand': demand}
+        AGENTS[env.now][name] = {
+            'name': name,
+            'genre': 'DD',
+            'Demand': DEMAND[env.now],
+            'Remaining_demand': demand,
+            'Demand_by_source': Demand_by_source,
+            'Price': _Price}
 
         yield env.timeout(1)

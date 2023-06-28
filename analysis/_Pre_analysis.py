@@ -14,6 +14,7 @@ def search_json_for(_json, __csv=None, print_=False):
     for period in _json:
         entries = _json[period]
         for entry_ in entries:
+
             _entry = entries[entry_]
 
             row = {'period': period}
@@ -46,12 +47,12 @@ def concat_csvs(json_files, file_type, name):
     to_search = json_files[file_type]
     start = timeit.default_timer()
     for entry in range(0, len(to_search)):
+        print(str(entry) + ' of ' + str(len(to_search) - 1) + ' is starting')
         json_file = open(to_search[entry])
         data = search_json_for(json.load(json_file))
         data['seed_name'] = str(entry)
         df = pd.concat([df, data], ignore_index=True, sort=False)
 
-        print(str(entry) + ' of ' + str(len(to_search) - 1) + ' is done')
         # print(data.shape[0])
     df.to_csv(name, index=False)
     stop = timeit.default_timer()
@@ -75,8 +76,8 @@ if __name__ == '__main__':
     # print(json_file)
     # global df
 
-    #print('STARTING MIX FILES')
-    #concat_csvs(json_files, 'mix', 'mix_test.csv')
+    print('STARTING MIX FILES')
+    concat_csvs(json_files, 'mix', 'mix_test.csv')
     print('STARTING CONTRACTS FILES')
     concat_csvs(json_files, 'contracts', 'contracts_test.csv')
     print('STARTING AGENTS FILES')
