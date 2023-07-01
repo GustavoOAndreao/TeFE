@@ -118,15 +118,17 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
             if agent['genre'] != 'DD':
                 append = agent['LSS_tot'] if weak == False else agent['LSS_weak']
-            else:
-                append = None
+                genre = agent['genre']
+                if genre in ['EP', 'TP', 'BB']:
+                    _priv_adaptation[period].append(append)
+                    _priv_goal[period].append(agent['profits'])
+                    print(agent['name'], genre, append, agent['profits'])
+                elif genre in ['DBB', 'TPM', 'EPM']:
+                    print(agent['name'], genre, append, agent['current_state'])
+                    _publ_adaptation[period].append(append)
+                    _publ_goal[period].append(agent['current_state'])
 
-            if agent['genre'] == ('EP' or 'TP' or 'BB'):
-                _priv_adaptation[period].append(append)
-                _priv_goal[period].append(agent['profits'])
-            elif agent['genre'] == ('DBB' or 'TPM' or 'EPM'):
-                _publ_adaptation[period].append(append)
-                _publ_goal[period].append(agent['current_state'])
+
 
     # ic(_priv_adaptation)
     # ic(DBB_adaptation)
@@ -411,7 +413,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
     plt.xlabel(names_dict[str(x)])
     plt.ylabel(names_dict[str(y)])
 
-    axA.axline([0, 0], [max(x), max(y)])
+    # axA.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     title = names_dict[str(y)] + " in relation to " + names_dict[str(x)]
     plt.title(title)
@@ -478,7 +480,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     figAss.colorbar(points)
 
-    axAss.axline([0, 0], [max(x), max(y)])
+    # axAss.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     plt.xlabel(names_dict[str(x)])
     plt.ylabel(names_dict[str(y)])
@@ -512,7 +514,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axB.scatter(publ_adaptation, publ_goal, c=color, cmap='viridis')
 
-    axB.axline([0, 0], [max(x), max(y)])
+    # axB.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figB.colorbar(points)
 
@@ -548,14 +550,15 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axBs.scatter(publ_goal_speed, publ_adaptation_speed, c=color, cmap='viridis')
 
-    axBs.axline([0, 0], [max(x), max(y)])
+
+    # axBs.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figBs.colorbar(points)
 
     plt.xlabel(names_dict[str(x)])
     plt.ylabel(names_dict[str(y)])
 
-    title = names_dict[str(y)]+ " in relation to " + names_dict[str(x)]
+    title = names_dict[str(y)] + " in relation to " + names_dict[str(x)]
     plt.title(title)
 
     figBs.show() if show is True else None
@@ -584,7 +587,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axBss.scatter(x, y, c=color, cmap='viridis')
 
-    axBss.axline([0, 0], [max(x), max(y)])
+    # axBss.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figBs.colorbar(points)
 
@@ -620,7 +623,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axC.scatter(x, y, c=color, cmap='viridis')
 
-    axC.axline([0, 0], [max(x), max(y)])
+    # axC.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figC.colorbar(points)
 
@@ -656,7 +659,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axCs.scatter(x, y, c=color, cmap='viridis')
 
-    axCs.axline([0, 0], [max(x), max(y)])
+    # axCs.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figCs.colorbar(points)
 
@@ -692,7 +695,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axCss.scatter(x, y, c=color, cmap='viridis')
 
-    axCss.axline([0, 0], [max(x), max(y)])
+    # axCss.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figCss.colorbar(points)
 
@@ -728,7 +731,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axD.scatter(x, y, c=color, cmap='viridis')
 
-    axD.axline([0, 0], [max(x), max(y)])
+    # axD.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figD.colorbar(points)
 
@@ -764,7 +767,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axDs.scatter(x, y, c=color, cmap='viridis')
 
-    axDs.axline([0, 0], [max(x), max(y)])
+    # axDs.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figDs.colorbar(points)
 
@@ -800,7 +803,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axDss.scatter(x, y, c=color, cmap='viridis')
 
-    axDss.axline([0, 0], [max(x), max(y)])
+    # axDss.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figDss.colorbar(points)
 
@@ -838,7 +841,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     figE.colorbar(points)
 
-    axE.axline([0, 0], [max(x), max(y)])
+    # axE.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     plt.xlabel(names_dict[str(x)])
     plt.ylabel(names_dict[str(y)])
@@ -872,7 +875,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axEs.scatter(x, y, c=color, cmap='viridis')
 
-    axEs.axline([0, 0], [max(x), max(y)])
+    # axEs.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figEs.colorbar(points)
 
@@ -908,7 +911,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axEss.scatter(x, y, c=color, cmap='viridis')
 
-    axEss.axline([0, 0], [max(x), max(y)])
+    # axEss.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figEss.colorbar(points)
 
@@ -944,7 +947,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axF.scatter(x, y, c=color, cmap='viridis')
 
-    axF.axline([0, 0], [max(x), max(y)])
+    # axF.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     plt.xlabel(names_dict[str(x)])
     plt.ylabel(names_dict[str(y)])
@@ -980,7 +983,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axFs.scatter(x, y, c=color, cmap='viridis')
 
-    axFs.axline([0, 0], [max(x), max(y)])
+    # axFs.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figFs.colorbar(points)
 
@@ -1016,7 +1019,7 @@ def run_graphs(agents_dict, contracts_dict, mix_dict, technologic_dict, save=Fal
 
     points = axFss.scatter(x, y, c=color, cmap='viridis')
 
-    axFss.axline([0, 0], [max(x), max(y)])
+    # axFss.axline([0, 0], [min(max(x), max(y)), min(max(x), max(y))])
 
     figFss.colorbar(points)
 

@@ -636,13 +636,13 @@ def evaluating_FF(name, add=None, change=None):
     if random.uniform(0, 1) > randomness:
         # ic(present, np.mean(hist))
         if np.mean(present) > (1 + LSS_thresh) * np.mean(hist):
-            ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
+            # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
             # current is better than hist, so now we run the distribution
             verdict = 'add' if add[genre] is True else 'keep'
             impatience_increase = -1
             ratio = np.mean(hist) / np.mean(present)
         elif np.mean(present) < (1 - LSS_thresh) * np.mean(hist):
-            ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
+            # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
             # current is better than hist, so now we run the distribution
             verdict = 'change' if change[genre] is True else 'keep'
             impatience_increase = 1
@@ -656,7 +656,7 @@ def evaluating_FF(name, add=None, change=None):
             dist = np.random.beta(1, 3)
 
             if dist > ratio:
-                ic(name, attempt, impatience, dist, ratio)
+                # ic(name, attempt, impatience, dist, ratio)
                 strikes = True
                 break
 
@@ -668,11 +668,24 @@ def evaluating_FF(name, add=None, change=None):
         if add[genre] is True:
             choice_list.append('add')
 
+        verdict = random.choice(['keep', 'change', 'add'])
+        if verdict == 'keep':
+            impatience_increase = 0
+        elif verdict == 'change':
+            impatience_increase = 1
+        elif verdict == 'add':
+            impatience_increase = -1
+        verdict = verdict if verdict in choice_list else 'keep'
+        dist = np.random.beta(1, 3)
+        ratio = np.random.beta(1, 3)
+        strikes = True if dist > ratio else False
+        """
         verdict = random.choice(choice_list)
         strikes = random.choice([True, False])
         impatience_increase = random.choice([-1, 0, 1])
+        """
 
-    ic(name, verdict, strikes, env.now)
+    # ic(name, verdict, strikes, env.now)
 
     return {'verdict': verdict, 'strikes': strikes, 'impatience_increase': impatience_increase}
 
@@ -732,8 +745,7 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
         AGENTS[env.now][name][striked] = options
         # print(AGENTS[env.now][name][striked])
 
-        # print(name, 'changed', striked, 'from', AGENTS[env.now - 1][name][striked][0], 'to', chosen_entry, 'at',
-        # env.now, 'period')
+        print(name, 'changed', striked, 'from', AGENTS[env.now - 1][name][striked][0], 'to', chosen_entry, 'at', env.now, 'period') if striked == "source" else None
         # ic(AGENTS[env.now][name]["LSS_tot"])
         AGENTS[env.now][name]["LSS_tot"] += 1
         # ic(AGENTS[env.now][name]["LSS_tot"])
@@ -800,7 +812,7 @@ def private_deciding_FF(name):
 
     # new_value = max(0, min(1, (1 - past_weight) * ratio + past_weight * previous_var, 1))
     new_value = max(0, min(1, random.normalvariate(previous_var, (1 - past_weight) * ratio)))
-    ic(name, previous_var, ratio, new_value)
+    # ic(name, previous_var, ratio, new_value)
 
     return new_value
 
@@ -855,7 +867,7 @@ def public_deciding_FF(name):
         # new_value = max(0, min(1, (1 - past_weight) * ratio + past_weight * previous_var))
         # new_value = max(0, min(1, random.normalvariate(previous_var, (1 - past_weight)*ratio)))
         new_value = max(0, min(1, random.normalvariate(previous_var, (1 - past_weight) * ratio)))
-        ic(name, previous_var, ratio, new_value)
+        # ic(name, previous_var, ratio, new_value)
 
     else:
         new_value = previous_var
@@ -1094,6 +1106,9 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, True)
                 # print('at', env.now, 'project from', i.get('receiver'), i.get('TP'), 'has this NPV', NPV)
+                """ic(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
+                                        i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
+                                        AMMORT, cash_flow_risk, financing_risk, True, NPV, i['source'])"""
                 adressed_projects_NPVs.append({'code': _, 'NPV': NPV})
                 adressed_projects.update({_: i.copy()})
         adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x.get('NPV'), reverse=True)
@@ -1132,8 +1147,8 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         # ic(k, accepted_source, prod_cap_pct, (1-value), npv, car_ratio, BASEL, name, acceptance_cond)
         # print(name, acceptance_cond, new_new_wallet >= 0, car_ratio >= BASEL)
         # print(acceptance_cond is True and new_new_wallet >= 0 and car_ratio >= BASEL)
-        if acceptance_cond == True and new_new_wallet >= 0 and car_ratio >= BASEL:
-            # print('FLAMENGO')
+        if acceptance_cond == True and new_new_wallet >= 0: # and car_ratio >= BASEL:
+            print('FLAMENGO')
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
             # print("new contract", j)
@@ -1156,19 +1171,21 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                 """if 'guarantee' not in new_contract:
                     new_contract.update({'guarantee': False})"""
 
-            CONTRACTS.get(env.now).update({i: new_contract})
-          # name, 'financed', new_contract)
+            # CONTRACTS.get(env.now).update({i: new_contract})
+          #  name, 'financed', new_contract)
         else:
             # print(name, 'Rejected due to')
             # ic(acceptance_cond, new_new_wallet >= 0, car_ratio >= BASEL)
             new_contract = j.copy()
+
             new_contract.update({'status': 'rejected',
                                  'sender': name,
-                                 'receiver': j.get('sender')
+                                 'receiver': j.get('sender'),
+                                 'reason': ['wallet after', new_new_wallet, 'car_ratio', car_ratio],
                                  })
             """if 'guarantee' not in new_contract:
                 new_contract.update({'guarantee': False})"""
-            CONTRACTS.get(env.now).update({i: new_contract})
+        CONTRACTS.get(env.now).update({i: new_contract})
 
     my_wallet = new_wallet
     my_receivables = new_receivables

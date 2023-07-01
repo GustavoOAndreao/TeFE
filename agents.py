@@ -49,7 +49,7 @@ def make_ep(name,
     :return:
     """
     if wallet is None:
-        wallet = random.uniform(0, 3) * 10 ** 6
+        wallet = random.uniform(0, 2) * 10 ** 8
     if decision_var is None:
         decision_var = random.uniform(0, 1)
     if current_weight is None:
@@ -68,8 +68,7 @@ def make_ep(name,
     if tolerance is None:
         tolerance = random_list(24)
     if periodicity is None:
-        periodicity = random_list(12)
-        periodicity = random.choice(periodicity)
+        periodicity = int(random.uniform(1, 12))
     if discount is None:
         discount = [0.001, 0.005, 0.01]
         random.shuffle(discount)
@@ -97,8 +96,8 @@ def make_ep(name,
 
 TECHNOLOGY_PROVIDERS = [TP(env=env,
                            name='TP_0',
-                           wallet=2*10**5,
-                           capacity=20*10**3,
+                           wallet=random.uniform(0, 1)*10**6,
+                           capacity=random.uniform(10, 20)*10**3,
                            Technology={'name': 'TP_0',
                                        "green": True,
                                        "source": 1,
@@ -115,16 +114,16 @@ TECHNOLOGY_PROVIDERS = [TP(env=env,
                                        'last_marginal_innovation': 0,
                                        'emissions': 0,
                                        'avoided_emissions': 250},
-                           RnD_threshold=4,
-                           capacity_threshold=3,
-                           decision_var=0.5,
+                           RnD_threshold=random.uniform(2, 5),
+                           capacity_threshold=random.uniform(2, 5),
+                           decision_var=random.uniform(0, 1),
                            cap_conditions={},
-                           impatience=[1, 5],
-                           past_weight=[0.75],
-                           LSS_thresh=[0.25, 0.1],
-                           memory=[12, 6],
-                           discount=[0.02],
-                           strategy=['capacity', "innovation"],
+                           impatience=random.sample([1, 3, 5], 2),
+                           past_weight=random.sample([0.25, 0.5, 0.75], 2),
+                           LSS_thresh=random.sample([0.25, 0.1, 0.5, 0.75], 2),
+                           memory=random.sample([12, 6, 24], 2),
+                           discount=random.sample([0.005, 0.001, 0.002], 2),
+                           strategy=random.sample(['capacity', "innovation"], 2),
                            starting_tech_age=3),
                         TP(env=env,
                            name='TP_1',
@@ -146,16 +145,16 @@ TECHNOLOGY_PROVIDERS = [TP(env=env,
                                        'last_marginal_innovation': 0,
                                        'emissions': 0,
                                        'avoided_emissions': 50},
-                           RnD_threshold=4,
-                           capacity_threshold=3,
-                           decision_var=0.7,
+                           RnD_threshold=random.uniform(2, 5),
+                           capacity_threshold=random.uniform(2, 5),
+                           decision_var=random.uniform(0, 1),
                            cap_conditions={},
-                           impatience=[2, 5],
-                           past_weight=[0.4],
-                           LSS_thresh=[0.5, 0.75],
-                           memory=[12, 24],
-                           discount=[0.001, 0.1],
-                           strategy=['capacity', "innovation"],
+                           impatience= random.sample([1, 3, 5], 2),
+                           past_weight=random.sample([0.25, 0.5, 0.75], 2),
+                           LSS_thresh=random.sample([0.25, 0.1, 0.5, 0.75], 2),
+                           memory=random.sample([12, 6, 24], 2),
+                           discount=random.sample([0.005, 0.001, 0.002], 2),
+                           strategy=random.sample(['capacity', "innovation"], 2),
                            starting_tech_age=1
                            )]
 
@@ -172,55 +171,55 @@ PRIVATE_BANK = []
 
 config.BB_NUMBER = len(PRIVATE_BANK)
 
+DEMAND = Demand(env=env,
+                initial_demand=INITIAL_DEMAND,
+                when=1,
+                increase=INITIAL_DEMAND * random.uniform(0.001, 0.005))
+
 POLICY_MAKERS = [DBB(env=env,
                      name='BNDES',
-                     wallet=random.uniform(0, 2) * 10 ** 9,
+                     wallet=random.uniform(0, 5) * 10 ** 9,
                      instrument=['finance'],  # ['finance', 'guarantee']
                      source=random.sample([{2: random.uniform(0, 1000)}, {1: random.uniform(0, 1000)}], 2),
                      decision_var=random.uniform(0, 1),
                      LSS_thresh=random.sample([.1, .5, .75], 3),
-                     past_weight=[0.5, 0.25, 0.75],
-                     memory=[12],
-                     discount=[0.001],
+                     past_weight=random.sample([0.1, 0.5, 0.25, 0.75, 0.9], 3),
+                     memory=random.sample([6, 12, 24], 3),
+                     discount=random.sample([0.001, 0.005, 0.01], 2),
                      policies=[],
-                     impatience=[3],
-                     disclosed_thresh=[0.2],
-                     rationale=['green']),
+                     impatience=random.sample([1, 3, 4], 3),
+                     disclosed_thresh=random.sample([0.1, 0.25, 0.5], 3),
+                     rationale=['capacity']),
                  EPM(env=env,
-                     wallet=20 * 10 ** 9,
-                     PPA_expiration=20*12,
+                     wallet=random.uniform(0, 5) * 10 ** 9,
+                     PPA_expiration=350,  # int(random.uniform(1, 20))  * 12,
                      PPA_limit=12,
-                     COUNTDOWN=6,
-                     decision_var=0.5,
-                     auction_capacity=10,
-                     instrument=['auction'],  # ['auction', 'carbon_tax', 'FiT'],
-                     source=[{2: 500}, {1: 1000}],
-                     LSS_thresh=[.1],
-                     impatience=[4],
-                     disclosed_thresh=[0.3],
+                     COUNTDOWN=int(random.uniform(3, 12)),
+                     decision_var=random.uniform(0, 1),
+                     auction_capacity=random.uniform(0.5, 1) * config.INITIAL_DEMAND,
+                     instrument=['FiT'],  # random.sample(['auction', 'carbon_tax', 'FiT'], 3),  # ['auction', 'carbon_tax', 'FiT'],
+                     source=random.sample([{2: random.uniform(0, 1000)}, {1: random.uniform(0, 1000)}], 2),
+                     LSS_thresh=random.sample([.1, .5, .75], 3),
+                     impatience=random.sample([1, 3, 4], 3),
+                     disclosed_thresh=random.sample([0.1, 0.25, 0.5], 3),
                      past_weight=[0.5, 0.25, 0.75],
-                     memory=[12],
-                     discount=[0.003],
+                     memory=random.sample([6, 12, 24], 3),
+                     discount=random.sample([0.001, 0.005, 0.01], 2),
                      policies=[],
                      rationale=['green']),
                  TPM(env=env,
-                     wallet=20 * 10 ** 9,
-                     boundness_cost=0.3,
-                     instrument=['unbound', 'bound'],
-                     source=[{2: 500}, {1: 1000}],
-                     decision_var=0.5,
-                     LSS_thresh=[0.25, 0.45],
-                     impatience=[2],
-                     disclosed_thresh=[0.5, 0.1],
+                     wallet=random.uniform(0, 10) * 10 ** 9,
+                     boundness_cost=random.betavariate(3,1),
+                     instrument=random.sample(['unbound', 'bound'], 2),
+                     source=random.sample([{2: random.uniform(0, 1000)}, {1: random.uniform(0, 1000)}], 2),
+                     decision_var=random.uniform(0, 1),
+                     LSS_thresh=random.sample([.1, .5, .75], 3),
+                     impatience=random.sample([1, 3, 4], 3),
+                     disclosed_thresh=random.sample([0.1, 0.25, 0.5], 3),
                      past_weight=[0.5, 0.25, 0.75],
-                     memory=[24, 36, 12],
-                     discount=[0.001, 0.008],
+                     memory=random.sample([6, 12, 24], 3),
+                     discount=random.sample([0.001, 0.005, 0.01], 2),
                      policies=[],
-                     rationale=['green'])]
+                     rationale=['innovation'])]
 
 config.PUB_NUMBER = len(POLICY_MAKERS)
-
-DEMAND = Demand(env=env,
-                initial_demand=INITIAL_DEMAND,
-                when=1,
-                increase=INITIAL_DEMAND * 0.0025)

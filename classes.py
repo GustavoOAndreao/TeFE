@@ -265,13 +265,13 @@ def run_TP(name,
 
         if Technology['transport'] is False:
             """ if the technology is not transportable, then the productive capacity impacts on the CAPEX """
-            j = Technology['base_CAPEX']
+            base_capex = Technology['base_CAPEX']
             """ we have to produce the actual CAPEX, with is the base_CAPEX multiplied by euler's number to the
              power of the ratio of how many times the base capex is greater than the capacity itself multiplied
               by the threshold of capacity"""
-            new_capex = min(j, (capacity_threshold / capacity) * j)
+            new_capex = min(base_capex, capacity_threshold * base_capex / capacity)
             Technology.update({
-                'CAPEX': j * new_capex
+                'CAPEX': new_capex
             })
         else:
             """ the technology is transportable (e.g. solar panels)"""
@@ -795,9 +795,9 @@ def run_EPM(genre,
                     CARBON-TAX
                     """
 
-                    for _ in TECHNOLOGIC[0]:
-                        i = TECHNOLOGIC[0][_]
-                        j = TECHNOLOGIC[env.now][_]
+                    for _ in MIX[env.now]:
+                        i = TECHNOLOGIC[0]['TP_thermal']
+                        j = MIX[env.now][_]
                         """ for the carbon-tax, if the source is thermal (0) or natural gas (3), then, its OPEX gets
                          higher"""
                         if i['source'] == 0:
@@ -813,7 +813,9 @@ def run_EPM(genre,
                     """ we are actually using Feed-in premium, since we are adding a payment to the market price"""
                     for _ in MIX[env.now]:
                         i = MIX[env.now][_]
-                        if i['source'] == entry_chosen_source and i['auction_contracted'] is not True:
+                        if i['source'] == entry_chosen_source and (i['auction_contracted'] is False or
+                                                                   'auction_contracted' not in i):
+                            # print(i)
                             i['price'] = i['price'] * (1 + entry_value)
 
                 elif entry_instrument == 'auction':
@@ -1784,8 +1786,9 @@ def run_EP(env,
                                'MWh': jj['MWh']
                                }
                     })
-                elif ('guarantee' in i or 'auction_contracted' in i) and name == (i['receiver'] or i['sender']) and i[
-                    'status'] == 'project':
+                elif i['status'] in ['project', 'rejected'] and (
+                        i['CAPEX'] < wallet or ('guarantee' in i or 'auction_contracted' in i)
+                ) and name in [i['receiver'], i['sender']]:
                     # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be
                     # inserted into the portfolio_of_projects dictionary
                     j = i.copy()
@@ -1793,7 +1796,8 @@ def run_EP(env,
                     if 'limit' not in j:
                         # if the key 'limit' is not in j, then we insert it, as well as the list failed_attempts, in
                         # which we put the name of the banks that rejected the project
-                        j['limit'], j['failed_attempts'] = env.now + 1 + _tolerance, [i['receiver']]
+                        # j['limit'], j['failed_attempts'] = env.now + 1 + _tolerance, [i['receiver']]
+                        j['limit'] = env.now + 1 + _tolerance
                     # print(_, 'added to the portfolio of projects')
                     portfolio_of_projects.update({_: j})
 
@@ -1803,22 +1807,28 @@ def run_EP(env,
         #                                                           #
         #############################################################
         if env.now > 0 and env.now % periodicity == 0:
+            mix_expansion = ((
+                                     config.INITIAL_DEMAND * value + (AGENTS[env.now - 1]['DD']['Remaining_demand'] / (24 * 30))
+                             ) / EP_NUMBER)
+            ic(mix_expansion, value)
             # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
-            if AGENTS[env.now-1]['DD']['Remaining_demand'] > 0:
+            """if AGENTS[env.now-1]['DD']['Remaining_demand'] > 0:
                 condition = True
             else:
-                condition = value > 0
+                condition = value > 0"""
+            condition = True
         else:
             condition = False
+            mix_expansion = 0
 
-        if condition is True:  # and wallet > 0:
-            # print(name, 'is trying to increase its capacity')
-            if AGENTS[env.now - 1]['DD']['Remaining_demand'] > 0:
+        if (condition == True) and (mix_expansion > 0):  # and wallet > 0:
+            print(name, 'is trying to increase its capacity')
+            """if AGENTS[env.now - 1]['DD']['Remaining_demand'] > 0:
                 mix_expansion = AGENTS[env.now - 1]['DD']['Remaining_demand'] / (24 * 30 * EP_NUMBER)  # the demand is
                 # in mwh, but the expansion is in MW
             else:
                 mix_expansion = config.INITIAL_DEMAND/EP_NUMBER
-                mix_expansion *= value
+                mix_expansion *= value"""
 
             # print(mix_expansion)
 
@@ -1835,8 +1845,10 @@ def run_EP(env,
                     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
                     Lumps = np.ceil(mix_expansion / i['MW'])
                     price = source_price[i['source']]
-                    NPV = npv_generating_FF(r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'],
-                                            i['CAPEX'], i['OPEX'], price, i['CF'], AMMORT)
+                    NPV = npv_generating_FF(
+                        r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price,
+                        i['CF'], AMMORT
+                    )
                     if NPV > _TP['NPV'] or _TP['NPV'] is False:
                         _TP.update({
                             'TP': _,
@@ -1847,15 +1859,6 @@ def run_EP(env,
                             'source_of_TP': i['source']
                         })
 
-            if source in AUCTION_WANTED_SOURCES:
-                receiver = 'EPM'
-            else:
-                """ if the source is not currently in an auction, the EP sends it directly to a bank"""
-                """ now we select which bank to try """
-
-                receiver = bank_sending_FF()
-
-
             # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the
             # whole project
             # ic(TP['TP'], name, _source) if TP['TP'] == 0 else None
@@ -1863,7 +1866,7 @@ def run_EP(env,
             # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
             project.update({
                 'sender': name,
-                'receiver': receiver,
+                'receiver': 'EPM' if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES else bank_sending_FF(),
                 'TP': _TP['TP'],
                 'Lumps': _TP['Lumps'],
                 'old_CAPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['CAPEX'],
@@ -1877,7 +1880,8 @@ def run_EP(env,
                 'emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['emissions'] * _TP['Lumps'],
                 'guarantee': False
             })
-            if _source in AUCTION_WANTED_SOURCES:
+            if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
+                print('sending to EPM for auction')
                 project.update(
                     {'status': 'bidded',
                      'price': (
@@ -2140,7 +2144,7 @@ def run_DD(env,
                      ) * (1 + MARGIN) / chosen_plant['MWh']
             for i in possible_projects:
                 """ if the plant is auction contracted, then we do not mess with its price"""
-                if 'auction_contracted' not in i:
+                if 'auction_contracted' not in i or i['auction_contracted'] is False:
                     MIX[env.now][i['code']].update({
                         'price': price})
 
