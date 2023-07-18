@@ -269,7 +269,7 @@ def run_TP(name,
             """ we have to produce the actual CAPEX, with is the base_CAPEX multiplied by euler's number to the
              power of the ratio of how many times the base capex is greater than the capacity itself multiplied
               by the threshold of capacity"""
-            new_capex = min(base_capex, capacity_threshold * base_capex / capacity)
+            new_capex = max(min(base_capex, capacity_threshold * base_capex * 10**9 / capacity), base_capex/2)
             Technology.update({
                 'CAPEX': new_capex
             })
@@ -1810,7 +1810,7 @@ def run_EP(env,
             mix_expansion = ((
                                      config.INITIAL_DEMAND * value + (AGENTS[env.now - 1]['DD']['Remaining_demand'] / (24 * 30))
                              ) / EP_NUMBER)
-            ic(mix_expansion, value)
+            # ic(mix_expansion, value) if env.now> config.FUSS_PERIOD else None
             # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
             """if AGENTS[env.now-1]['DD']['Remaining_demand'] > 0:
                 condition = True
@@ -1822,7 +1822,7 @@ def run_EP(env,
             mix_expansion = 0
 
         if (condition == True) and (mix_expansion > 0):  # and wallet > 0:
-            print(name, 'is trying to increase its capacity')
+            # print(name, 'is trying to increase its capacity')
             """if AGENTS[env.now - 1]['DD']['Remaining_demand'] > 0:
                 mix_expansion = AGENTS[env.now - 1]['DD']['Remaining_demand'] / (24 * 30 * EP_NUMBER)  # the demand is
                 # in mwh, but the expansion is in MW
@@ -1831,6 +1831,10 @@ def run_EP(env,
                 mix_expansion *= value"""
 
             # print(mix_expansion)
+
+            max_lump = {0: int(1500/config.THERMAL['MW']),
+                        1: int(399/config.WIND['MW']),
+                        2: int(329/config.SOLAR['MW'])}
 
             # print(EP_NUMBER)
             _TP = {'TP': 0,
@@ -1843,7 +1847,7 @@ def run_EP(env,
                 i = TECHNOLOGIC[env.now - 1][_]
                 if i['source'] == _source:
                     source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
-                    Lumps = np.ceil(mix_expansion / i['MW'])
+                    Lumps = min(max(1, np.ceil(mix_expansion / i['MW'])), max_lump[_source])
                     price = source_price[i['source']]
                     NPV = npv_generating_FF(
                         r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price,
@@ -1881,7 +1885,7 @@ def run_EP(env,
                 'guarantee': False
             })
             if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
-                print('sending to EPM for auction')
+                # print('sending to EPM for auction')
                 project.update(
                     {'status': 'bidded',
                      'price': (
@@ -1893,8 +1897,12 @@ def run_EP(env,
                 project['auction_contracted'] = False
             code = uuid.uuid4().int
             project['code'] = code
-            CONTRACTS[env.now][code] = project
-            # ic(name, project)
+
+            if config.BB_NUMBER > 0 and _TP['source_of_TP'] not in AUCTION_WANTED_SOURCES:
+                CONTRACTS[env.now][code] = project
+                # ic(name, project)
+            else:
+                portfolio_of_projects.update({code: project})
 
         # print(portfolio_of_projects, name)
 
@@ -1902,6 +1910,9 @@ def run_EP(env,
         for _ in portfolio_of_projects:
             """ now we have to resend the "projects in the portfolio_of_projects dictionary """
             i = portfolio_of_projects[_].copy()
+
+            if 'limit' not in i:
+                i['limit'] = env.now + 1 + _tolerance
 
             if i['limit'] == env.now:
                 # print('project ', _, ' has reached its limit time...')
@@ -2053,7 +2064,7 @@ def run_DD(env,
 
     while True:
 
-        print(env.now)
+        # print(env.now)
         # from_time_to_agents_FF(AGENTS)
         # from_time_to_agents_FF(TECHNOLOGIC)
 
@@ -2070,8 +2081,8 @@ def run_DD(env,
 
         if env.now == 0:
             DEMAND.update({env.now: initial_demand})
-            printable = 'seed is ' + str(config.seed)
-            print(printable)
+            # printable = 'seed is ' + str(config.seed)
+            # print(printable)
 
         elif env.now % when == 0:
             """ first, we get how much green is E or M"""
@@ -2157,5 +2168,104 @@ def run_DD(env,
             'Remaining_demand': demand,
             'Demand_by_source': Demand_by_source,
             'Price': _Price}
+
+        yield env.timeout(1)
+
+
+class Hetero(object):
+    def __init__(self, env, hetero_threshold):
+        self.env = env
+        self.genre = 'HH'
+        self.name = 'HH'
+        self.hetero_threshold = hetero_threshold,
+        self.randomly = False if config.INITIAL_RANDOMNESS < 1 else True  # just to put more emphasis on the
+        # randomness of the random runs
+        self.action = env.process(run_HH(self.env,
+                                         self.genre,
+                                         self.name,
+                                         self.hetero_threshold,
+                                         self.randomly))
+
+
+def run_HH(env,
+           genre,
+           name,
+           hetero_threshold,
+           randomly
+           ):
+    CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN,  EP_NUMBER, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.EP_NUMBER, config.env
+
+    while True:
+
+        #################################################################
+        #                                                               #
+        #                How many public agents are there?              #
+        #                                                               #
+        #################################################################
+
+        list_of_pm = []
+
+        for _ in AGENTS[env.now]:
+            agent = AGENTS[env.now][_]
+
+            if agent['genre'] in ['DBB', 'EPM']:
+                list_of_pm.append(agent)
+
+        if len(list_of_pm) > 1:
+
+            #That means we have a EPM and a DBB
+
+            #################################################################
+            #                                                               #
+            #                Perform the heterogeneity check                #
+            #                                                               #
+            #################################################################
+
+            # We are saving the results of the homogeneity to the demand object, just to avoid creating a new entry
+            # on the agents dictionary
+
+            # above the threshold, so we have to homogenize things
+            list_o_entries = ['source', 'disclosed_var', 'LSS_thresh', 'past_weight', 'memory', 'discount',
+                              'disclosed_thresh']
+            chosen_entries = []
+            for entry in list_o_entries:
+                if AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now]['EPM'][entry][0]:
+                    chosen_entries.append(entry)
+
+            if len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
+                # above the threshold and above the heterogeneity test, so we have to homogenize things
+                for entry in chosen_entries:
+                    if randomly is False:
+                        who = []
+                        if env.now > 0 and AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now - 1]['BNDES'][entry][0]:
+                            who.append('BNDES')
+                        elif env.now > 0 and AGENTS[env.now]['EPM'][entry][0] != AGENTS[env.now - 1]['EPM'][entry][0]:
+                            who.append('EPM')
+                    else:
+                        who = []  # just to avoid errors
+
+                    if randomly is True or env.now == 0 or len(who) > 1:
+                        # If random is True, then it is randomized
+                        # If it's the first period, then it must be random
+                        # If both policy makers changed, then it really doesn't matter who follows who
+
+                        chosen = random.choice([AGENTS[env.now]['BNDES'][entry][0],
+                                                AGENTS[env.now]['EPM'][entry][0]])
+                        AGENTS[env.now]['BNDES'][entry][0] = chosen
+                        AGENTS[env.now]['EPM'][entry][0] = chosen
+
+                    else:
+
+                        # If it's not random, then we have to change to the most updated one
+
+                        who_else = ['EPM', 'BNDES']
+                        who_else.remove(who[0])
+
+                        AGENTS[env.now][who_else[0]][entry][0] = AGENTS[env.now][who[0]][entry][0]
+
+                AGENTS[env.now]['DD']['homo'] = True  # Just to say that things were changed
+            else:
+                # Nothing happened
+                AGENTS[env.now]['DD']['homo'] = False
 
         yield env.timeout(1)
