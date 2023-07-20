@@ -858,20 +858,38 @@ def run_EPM(genre,
                                     possible_projects.append(j)
                         """ we have to sort in terms of 'OPEX' """
                         possible_projects = sorted(possible_projects, key=lambda x: x['price'])
+                        # ic(possible_projects)
                         """ the capacity for auction is the value (in GW) multplied by 1000 (to become MW)"""
-                        remaining_capacity = auction_capacity * entry_value * 1000
+
+                        max_auction = 2000
+                        min_auction = 800
+
+                        remaining_capacity = max(
+                            min(auction_capacity * entry_value * 1000 + AGENTS[env.now-1]['DD']['Remaining_demand']/24*30 + 25 * 12 * (DEMAND[env.now-1]-DEMAND[env.now-2]),
+                                max_auction),
+                            min_auction)
+
+                        """
+                         The auction size is between 0,8 GW and 2 GW, being made of three parts:
+                         
+                         1- the auction capacity (in GW) times the decision_var
+                         2- the remanining demand (surpluses reduce the auction size)
+                         3- the expected increase in demand for the next 25 years
+                         
+                        """
+
                         for project in possible_projects:
                             if remaining_capacity > 0:
                                 """ if there is still capacity to contract, then the project is contracted"""
                                 contracted_projects.append(project)
                             remaining_capacity -= project['capacity']
-                        """ then we cycle throught the codes of the contracted projects in order to tell the proponent 
+                        """ then we cycle through the codes of the contracted projects in order to tell the proponent 
                         agents that their projects were contracted"""
                         for project in contracted_projects:
                             """ first we update it to include attributes exclusive to PPAs, such as the auction price, 
                             the boolean auction_contracted and the date of expiration of the price"""
                             code = project['code']
-                            project['receiver'] = project['sender'] # we have to switch them
+                            project['receiver'] = project['sender']  # we have to switch them
                             """if math.isnan(price) is True:
                                 print(project)
                                 print(price, project['OPEX'], project['CAPEX'], project['lifetime'], MARGIN, project['MWh'])
@@ -1786,9 +1804,13 @@ def run_EP(env,
                                'MWh': jj['MWh']
                                }
                     })
-                elif i['status'] in ['project', 'rejected'] and (
-                        i['CAPEX'] < wallet or ('guarantee' in i or 'auction_contracted' in i)
-                ) and name in [i['receiver'], i['sender']]:
+                elif (
+                        i['status'] in ['project', 'rejected'] and
+                        (
+                                (i['CAPEX'] < wallet and i['status'] == 'rejected') or
+                                ('guarantee' in i or 'auction_contracted' in i)
+                        ) and name in [i['receiver'], i['sender']]
+                ):
                     # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be
                     # inserted into the portfolio_of_projects dictionary
                     j = i.copy()
@@ -1895,13 +1917,17 @@ def run_EP(env,
             else:
                 project['status'] = 'project'
                 project['auction_contracted'] = False
+            # print(_TP['source_of_TP'], AUCTION_WANTED_SOURCES, _TP['source_of_TP'] in AUCTION_WANTED_SOURCES)
             code = uuid.uuid4().int
             project['code'] = code
 
-            if config.BB_NUMBER > 0 and _TP['source_of_TP'] not in AUCTION_WANTED_SOURCES:
+            if config.BB_NUMBER > 0 or _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
+                # print('sent')
                 CONTRACTS[env.now][code] = project
                 # ic(name, project)
             else:
+                # If there are no banks and no current auctions, the project goes straight to the reinvestment
+                # possibility
                 portfolio_of_projects.update({code: project})
 
         # print(portfolio_of_projects, name)
@@ -1933,7 +1959,6 @@ def run_EP(env,
                 code = _  # uuid.uuid4().int
                 # print(_)
                 _to_pop.append(_)
-                last_acquisition_period = env.now
                 project = i.copy()
                 project.update({
                     'EP': name,
@@ -2014,6 +2039,7 @@ def run_EP(env,
                   "profits": profits,
                   "dd_profits": dd_profits,
                   "LSS_tot": LSS_tot,
+                  "shareholder_money": shareholder_money
                   }
 
         if env.now > 1:
@@ -2177,7 +2203,7 @@ class Hetero(object):
         self.env = env
         self.genre = 'HH'
         self.name = 'HH'
-        self.hetero_threshold = hetero_threshold,
+        self.hetero_threshold = hetero_threshold
         self.randomly = False if config.INITIAL_RANDOMNESS < 1 else True  # just to put more emphasis on the
         # randomness of the random runs
         self.action = env.process(run_HH(self.env,
@@ -2213,7 +2239,7 @@ def run_HH(env,
 
         if len(list_of_pm) > 1:
 
-            #That means we have a EPM and a DBB
+            # That means we have a EPM and a DBB
 
             #################################################################
             #                                                               #
@@ -2229,17 +2255,31 @@ def run_HH(env,
                               'disclosed_thresh']
             chosen_entries = []
             for entry in list_o_entries:
-                if AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now]['EPM'][entry][0]:
-                    chosen_entries.append(entry)
+                if entry == 'disclosed_var':
+                    if AGENTS[env.now]['BNDES'][entry] != AGENTS[env.now]['EPM'][entry]:
+                        # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
+                        chosen_entries.append(entry)
+                else:
+                    if AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now]['EPM'][entry][0]:
+                        # print(AGENTS[env.now]['BNDES'][entry][0], AGENTS[env.now]['EPM'][entry][0])
+                        chosen_entries.append(entry)
 
-            if len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
+            if len(chosen_entries) > 0 and len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
                 # above the threshold and above the heterogeneity test, so we have to homogenize things
                 for entry in chosen_entries:
+                    if env.now > 0:
+                        current_bndes_var =  AGENTS[env.now]['BNDES'][entry][0]     if entry != 'disclosed_var' else AGENTS[env.now]['BNDES'][entry]
+                        previous_bndes_var = AGENTS[env.now - 1]['BNDES'][entry][0] if entry != 'disclosed_var' else AGENTS[env.now - 1]['BNDES'][entry]
+                        current_epm_var =    AGENTS[env.now]['EPM'][entry][0]       if entry != 'disclosed_var' else AGENTS[env.now]['EPM'][entry]
+                        previous_epm_var =   AGENTS[env.now - 1]['EPM'][entry][0]   if entry != 'disclosed_var' else AGENTS[env.now - 1]['EPM'][entry]
+                    else:
+                        current_bndes_var = previous_bndes_var = current_epm_var = previous_epm_var = 0
+
                     if randomly is False:
                         who = []
-                        if env.now > 0 and AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now - 1]['BNDES'][entry][0]:
+                        if env.now > 0 and current_bndes_var != previous_bndes_var:
                             who.append('BNDES')
-                        elif env.now > 0 and AGENTS[env.now]['EPM'][entry][0] != AGENTS[env.now - 1]['EPM'][entry][0]:
+                        elif env.now > 0 and current_epm_var != previous_epm_var:
                             who.append('EPM')
                     else:
                         who = []  # just to avoid errors
@@ -2249,10 +2289,21 @@ def run_HH(env,
                         # If it's the first period, then it must be random
                         # If both policy makers changed, then it really doesn't matter who follows who
 
-                        chosen = random.choice([AGENTS[env.now]['BNDES'][entry][0],
-                                                AGENTS[env.now]['EPM'][entry][0]])
-                        AGENTS[env.now]['BNDES'][entry][0] = chosen
-                        AGENTS[env.now]['EPM'][entry][0] = chosen
+                        """
+                        It is best to just copy the whole list to avoid destroying entries
+                        """
+
+                        chosen_agent = random.choice(['BNDES', 'EPM'])
+
+                        chosen = AGENTS[env.now][chosen_agent][entry]
+
+                        AGENTS[env.now]['BNDES'][entry] = chosen
+                        AGENTS[env.now]['EPM'][entry] = chosen
+
+                        """var = AGENTS[env.now]['BNDES'][entry][0] if 
+
+                        AGENTS[env.now][chosen_agent]['LSS_tot'] -= 1 if env.now > 0 and  else 0
+                        AGENTS[env.now][chosen_agent]['LSS_weak'] -= 1 if env.now > 0 and  else 0"""
 
                     else:
 
@@ -2261,9 +2312,12 @@ def run_HH(env,
                         who_else = ['EPM', 'BNDES']
                         who_else.remove(who[0])
 
-                        AGENTS[env.now][who_else[0]][entry][0] = AGENTS[env.now][who[0]][entry][0]
+                        AGENTS[env.now][who_else[0]][entry] = AGENTS[env.now][who[0]][entry]
+
+                        # print(AGENTS[env.now][who_else[0]][entry], AGENTS[env.now][who[0]][entry], 'equal?')
 
                 AGENTS[env.now]['DD']['homo'] = True  # Just to say that things were changed
+                # print(env.now, 'HOMO')
             else:
                 # Nothing happened
                 AGENTS[env.now]['DD']['homo'] = False

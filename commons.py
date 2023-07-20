@@ -7,6 +7,7 @@ from icecream import ic
 from config import seed
 from scipy.stats import gamma
 from matplotlib import pyplot as plt
+from collections import OrderedDict
 
 
 random.seed(seed)
@@ -732,6 +733,7 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
         striked = random.choice(list(strikables_dict.keys()))
 
         options = strikables_dict[striked].copy() # to avoid changing the actual dictionary
+        previous = strikables_dict[striked].copy()
         chosen = int(random.uniform(0, len(options))) if striked != 'source' else min(int(
             np.random.poisson(1)), len(options)-1)
         chosen_entry = strikables_dict[striked][chosen] if striked != 'source' else sorted(
@@ -745,12 +747,18 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
         options = [chosen_entry] + strikables_dict[striked]
         # print('after rebuilding', strikables_dict[striked]) if striked == "source" else None
 
+        # print(striked)
+
+        options = [options[i] for i in range(len(options)) if i == options.index(options[i])]
+
         AGENTS[env.now][name][striked] = options
         # print(AGENTS[env.now][name][striked])
 
         # print(name, 'changed', striked, 'from', AGENTS[env.now - 1][name][striked][0], 'to', chosen_entry, 'at', env.now, 'period') if striked == "source" else None
         # ic(AGENTS[env.now][name]["LSS_tot"])
-        AGENTS[env.now][name]["LSS_tot"] += 1
+        AGENTS[env.now][name]["LSS_tot"] += 1 if options != previous else 0  # If the process didn't actually change anything, then it doesn't count
+        # print('changed') if options != previous else print('not changed')
+        # print(options, previous)
         # ic(AGENTS[env.now][name]["LSS_tot"])
 
     if verdict in ['add', 'change']:

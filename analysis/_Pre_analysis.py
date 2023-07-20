@@ -258,7 +258,7 @@ if __name__ == '__main__':
             concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict + config.name, _format)
         for type_o_dict in ['mix', 'contracts']:
             print('STARTING ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES' + " (sampling)")
-            concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict + config.name, _format, big_files=True)
+            concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict + config.name, _format)  # , big_files=True)
 
     #merge_json_files(random_json_files['agents'])
 

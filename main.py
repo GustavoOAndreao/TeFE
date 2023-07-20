@@ -107,7 +107,7 @@ def run_sim(_seed, _name='test', random_run=False):
 
 if __name__ == '__main__':
 
-    RUN_TIMES = 100
+    RUN_TIMES = 10
     global_start = timeit.default_timer()
     from config import name
 
