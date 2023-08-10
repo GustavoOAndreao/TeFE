@@ -9,6 +9,7 @@ import time
 import config
 import pyarrow
 import random
+import winsound
 
 from flatten_json import flatten
 from itertools import zip_longest
@@ -160,14 +161,16 @@ def search_json_for(_json, _seed, __csv=None, print_=False):
     return df_list
 
 
-def concat_csvs(json_files, file_type, name, _format, big_files=False):
+def concat_csvs(json_files, file_type, name, _path, _format, big_files=None):
     # df = pd.DataFrame()
     df_big_list = []
+
     to_search = json_files[file_type]
-    to_search = random.sample(to_search, 11) if big_files is True else to_search
+    to_search = to_search if big_files is None else random.sample(to_search, big_files)
     start = timeit.default_timer()
     for entry in range(0, len(to_search)):
         print(str(entry) + ' of ' + str(len(to_search) - 1) + ' is starting at ' + time.strftime("%H:%M:%S", time.localtime()))
+        global path_to_json
         json_file = open(to_search[entry])
         """d = json.load(json_file)
         dd = pd.DataFrame.from_dict(d, orient='index')"""
@@ -187,6 +190,8 @@ def concat_csvs(json_files, file_type, name, _format, big_files=False):
 
     df = pd.json_normalize(df_big_list) if _format != 'pickle' else df_big_list
     # _csv = pd.concat([_csv.loc[:], _json_dict]).reset_index(drop=True)
+
+    name = _path + '__' + name
 
     if _format == 'csv':
         df.to_csv(name + '.csv', index=False)
@@ -211,54 +216,66 @@ def concat_csvs(json_files, file_type, name, _format, big_files=False):
 
 
 if __name__ == '__main__':
-    path_to_json = 'analysis/..'
-    # config.name = 'YES_YES' # If you need to override the name uncomment
-    just_normal = False
-    json_files = {'mix': [pos_json for pos_json in os.listdir(path_to_json) if
-                          (pos_json.endswith('.json') and 'MIX' in pos_json and config.name in pos_json and
-                           'RANDOM_RUN' not in pos_json)],
-                  'contracts': [pos_json for pos_json in os.listdir(path_to_json) if
-                                (pos_json.endswith('.json') and 'CONTRACTS' in pos_json and config.name in pos_json and
-                                 'RANDOM_RUN' not in pos_json)],
-                  'agents': [pos_json for pos_json in os.listdir(path_to_json) if
-                             (pos_json.endswith('.json') and 'AGENTS' in pos_json and config.name in pos_json and
-                              'RANDOM_RUN' not in pos_json)],
-                  'technologic': [pos_json for pos_json in os.listdir(path_to_json) if
-                                  (pos_json.endswith('.json') and 'TECHNOLOGIC' in pos_json and config.name in pos_json
-                                   and 'RANDOM_RUN' not in pos_json)]}
-    if just_normal is False:
-        random_json_files = {'mix': [pos_json for pos_json in os.listdir(path_to_json) if
-                                     (pos_json.endswith('.json') and 'MIX' in pos_json and config.name in pos_json and
-                                      'RANDOM_RUN' in pos_json)],
-                             'contracts': [pos_json for pos_json in os.listdir(path_to_json) if
-                                           (pos_json.endswith(
-                                               '.json') and 'CONTRACTS' in pos_json and config.name in pos_json and
-                                            'RANDOM_RUN' in pos_json)],
-                             'agents': [pos_json for pos_json in os.listdir(path_to_json) if
-                                        (pos_json.endswith('.json') and 'AGENTS' in pos_json and config.name in pos_json and
-                                         'RANDOM_RUN' in pos_json)],
-                             'technologic': [pos_json for pos_json in os.listdir(path_to_json) if
-                                             (pos_json.endswith(
-                                                 '.json') and 'TECHNOLOGIC' in pos_json and config.name in pos_json
-                                              and 'RANDOM_RUN' in pos_json)]}
 
-    # json_file = open(json_files['mix'][0])
+    list_of_dirs = next(os.walk('.'))[1]
+    list_of_dirs.remove('Figures')
 
-    # print(json_file)
-    # global df
+    # list_of_dirs = ['1_NO_YES']  # uncomment and put the directory name to override checking all directories
 
-    _format = 'csv'  # Choose from 'pickle', 'csv', 'parquet' or 'feather
+    for path in list_of_dirs:  # ['ALL_NO_NO', 'ALL_NO_YES', 'ALL_YES_NO', 'ALL_YES_YES']:
+        path_to_json = 'analysis/..'
+        path_to_json = path_to_json + '/' + path
+        # config.name = 'YES_YES' # If you need to override the name uncomment
+        just_normal = True
+        json_files = {'mix': [path_to_json + '/' + pos_json for pos_json in os.listdir(path_to_json) if
+                              (pos_json.endswith('.json') and 'MIX' in pos_json in pos_json and
+                               'RANDOM_RUN' not in pos_json)],
+                      'contracts': [path_to_json + '/' + pos_json for pos_json in os.listdir(path_to_json) if
+                                    (pos_json.endswith('.json') and 'CONTRACTS' in pos_json in pos_json and
+                                     'RANDOM_RUN' not in pos_json)],
+                      'agents': [path_to_json + '/' + pos_json for pos_json in os.listdir(path_to_json) if
+                                 (pos_json.endswith('.json') and 'AGENTS' in pos_json in pos_json and
+                                  'RANDOM_RUN' not in pos_json)],
+                      'technologic': [path_to_json + '/' + pos_json for pos_json in os.listdir(path_to_json) if
+                                      (pos_json.endswith('.json') and 'TECHNOLOGIC' in pos_json in pos_json
+                                       and 'RANDOM_RUN' not in pos_json)]}
+        if just_normal is False:
+            random_json_files = {'mix': [pos_json for pos_json in os.listdir(path_to_json) if
+                                         (pos_json.endswith('.json') and 'MIX' in pos_json and
+                                          'RANDOM_RUN' in pos_json)],
+                                 'contracts': [pos_json for pos_json in os.listdir(path_to_json) if
+                                               (pos_json.endswith(
+                                                   '.json') and 'CONTRACTS' in pos_json and
+                                                'RANDOM_RUN' in pos_json)],
+                                 'agents': [pos_json for pos_json in os.listdir(path_to_json) if
+                                            (pos_json.endswith('.json') and 'AGENTS' in pos_json and
+                                             'RANDOM_RUN' in pos_json)],
+                                 'technologic': [pos_json for pos_json in os.listdir(path_to_json) if
+                                                 (pos_json.endswith(
+                                                     '.json') and 'TECHNOLOGIC' in pos_json
+                                                  and 'RANDOM_RUN' in pos_json)]}
 
-    runs = ['random', 'normal'] if just_normal is False else ['normal']
+        # json_file = open(json_files['mix'][0])
 
-    for type_o_run in ['random', 'normal']:
-        files = json_files if type_o_run == 'normal' else random_json_files
-        for type_o_dict in ['technologic', 'agents']:  # 'mix', 'contracts']:
-            print('STARTING ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
-            concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict + config.name, _format)
-        for type_o_dict in ['mix', 'contracts']:
-            print('STARTING ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES' + " (sampling)")
-            concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict + config.name, _format)  # , big_files=True)
+        # print(json_file)
+        # global df
+
+        _format = 'csv'  # Choose from 'pickle', 'csv', 'parquet' or 'feather
+
+        runs = ['random', 'normal'] if just_normal is False else ['normal']
+
+        for type_o_run in runs:
+            files = json_files if type_o_run == 'normal' else random_json_files
+            for type_o_dict in ['technologic', 'agents']:  # 'mix', 'contracts']:
+                print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
+                concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict , path, _format)
+            for type_o_dict in ['mix', 'contracts']:
+                print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES' + " (sampling)")
+                concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict, path, _format)  # , big_files=True)
+
+    duration = 3000  # milliseconds
+    freq = 660  # Hz
+    winsound.Beep(freq, duration)
 
     #merge_json_files(random_json_files['agents'])
 

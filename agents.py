@@ -11,6 +11,6 @@ import config
 from config import *
 from classes import *
 
-import _agents____NONE_YES_YES
-reload(_agents____NONE_YES_YES)
-from   _agents____NONE_YES_YES import *
+import _agents____1_YES_NO
+reload(_agents____1_YES_NO)
+from   _agents____1_YES_NO import *

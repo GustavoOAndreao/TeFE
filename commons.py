@@ -3,6 +3,7 @@ import random
 import numpy as np
 from statistics import median
 import config
+from scipy.stats import halfnorm, norm
 from icecream import ic
 from config import seed
 from scipy.stats import gamma
@@ -303,7 +304,7 @@ def private_reporting_FF(genre):
     for TP in TECHNOLOGIC.get(env.now - 1):
         # we have the highest MW in order to compare things, the maximum price
         technology = TECHNOLOGIC.get(env.now - 1).get(TP)
-        demand_now = DEMAND.get(env.now - 1)  # .get(technology.get('EorM'))
+        demand_now = DEMAND.copy().get(env.now - 1)  # .get(technology.get('EorM'))
         max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'source': source})['value']
         # max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM})[
         # 'value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to
@@ -371,7 +372,7 @@ def public_reporting_FF(rationale):
         for TP in TECHNOLOGIC[env.now - 1]:
             # we have the highest MW in order to compare things, the maximum price
             technology = TECHNOLOGIC[env.now - 1][TP]
-            demand_now = DEMAND.get[env.now - 1]
+            demand_now = DEMAND.copy().get[env.now - 1]
             lumps = np.floor(demand_now / technology['MW'])
 
             avoided_emissions = technology['avoided'] * lumps
@@ -539,7 +540,7 @@ def thresholding_FF(threshold, disclosed_var, decision_var):
     :param decision_var:
     :return:
     """
-    threshold_upper, threshold_lower = disclosed_var * (1 + threshold), disclosed_var * (1 - threshold)
+    threshold_upper, threshold_lower = disclosed_var + threshold, disclosed_var - threshold
 
     if not threshold_lower < decision_var < threshold_upper:
         disclosed_var = decision_var
@@ -606,6 +607,8 @@ def evaluating_FF(name, add=None, change=None):
     genre = AGENTS[env.now - 1][name]['genre']
     impatience = AGENTS[env.now - 1][name]['impatience'][0]
 
+    # ic(name, env.now, impatience)
+
     verdict = 'keep'
     strikes = False
     impatience_increase = 0
@@ -631,11 +634,16 @@ def evaluating_FF(name, add=None, change=None):
         for time in range(max(0, env.now - 1 - memory), env.now-1):
             for _ in AGENTS[time]:
                 i = AGENTS[time][_]
+
                 if i['genre'] == genre:
                     _append = i['profits'] * ((1 - discount) ** (env.now - time))
-                    _to_append = hist if time < env.now - 1 - memory else present
+                    if i['name'] == name:
+                        _to_append = present
+                    else:
+                        _to_append = hist
+
                     _to_append.append(_append)
-        #present += AGENTS[env.now-1][name]['profits']
+        # present += AGENTS[env.now-1][name]['profits']
 
     if random.uniform(0, 1) > randomness:
         # ic(present, np.mean(hist))
@@ -652,15 +660,13 @@ def evaluating_FF(name, add=None, change=None):
             impatience_increase = 1
             ratio = np.mean(present) / np.mean(hist)
         else:
-            ratio = None
-        # ic(impatience, name)
+            ratio = 1
 
-        _impatience = impatience if ratio is not None else 0
-        for attempt in range(_impatience):
+        # ic(name, env.now, ratio, np.mean(present), np.mean(hist), verdict)
+        for attempt in range(1, impatience):
             dist = np.random.beta(1, 3)
-
             if dist > ratio:
-                # ic(name, attempt, impatience, dist, ratio)
+                # ic(name, env.now, dist, ratio, np.mean(present), np.mean(hist), verdict)
                 strikes = True
                 break
 
@@ -680,9 +686,12 @@ def evaluating_FF(name, add=None, change=None):
         elif verdict == 'add':
             impatience_increase = -1
         verdict = verdict if verdict in choice_list else 'keep'
-        dist = np.random.beta(1, 3)
+        """dist = np.random.beta(1, 3)
         ratio = np.random.beta(1, 3)
-        strikes = True if dist > ratio else False
+        strikes = True if dist > ratio else False"""
+
+        strikes = random.choice([True, False])
+
         """
         verdict = random.choice(choice_list)
         strikes = random.choice([True, False])
@@ -706,7 +715,7 @@ def strikable_dicting(strikables_dict):
     except:
         strikables_dict = strikables_dict
 
-   # 'strikables_dict', strikables_dict)
+    # ic('strikables_dict', strikables_dict)
 
     return strikables_dict
 
@@ -761,13 +770,14 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
         # print(options, previous)
         # ic(AGENTS[env.now][name]["LSS_tot"])
 
-    if verdict in ['add', 'change']:
-        """
-        If the agent added or changed something, it resets its impatience: impatience only builds up until something 
-        happens
-        """
-        # print('Impatience of agent', name, 'was reset at period', env.now, ' to ', AGENTS[0][name]['impatience'][0])
-        AGENTS[env.now][name]['impatience'][0] = AGENTS[0][name]['impatience'][0]
+        _memory = AGENTS[env.now][name]['memory'][0]
+        if verdict in ['add', 'change'] and env.now > _memory + 1:
+            """
+            If the agent added or changed something, it resets its impatience: impatience only builds up until something 
+            happens
+            """
+            # print('Impatience of agent', name, 'was reset at period', env.now, 'from', AGENTS[env.now][name]['impatience'][0], ' to ', AGENTS[0][name]['impatience'][0])
+            AGENTS[env.now][name]['impatience'][0] = AGENTS[_memory][name]['impatience'][0]
 
     # updated the list
 
@@ -791,7 +801,7 @@ def private_deciding_FF(name):
         end = env.now + memory  # we have to search unsimulated periods to get zero results and keep the ratio
     else:
         start = env.now - 1 - memory
-        end = env.now -1
+        end = env.now - 1
 
     genre = AGENTS[env.now - 1][name]["genre"]
 
@@ -818,14 +828,17 @@ def private_deciding_FF(name):
             # ic(np.mean(profits))
         else:
             ratio = 0
-    else:
-        ratio = max(0, min(1, random.normalvariate(previous_var, 1)))
 
-    # new_value = max(0, min(1, (1 - past_weight) * ratio + past_weight * previous_var, 1))
-    addition = random.normalvariate(0, abs(ratio))
-    addition = addition if ratio > 0 else -addition
-    new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
-    # ic(name, previous_var, ratio, new_value)
+        # new_value = max(0, min(1, (1 - past_weight) * ratio + past_weight * previous_var, 1))
+        addition = halfnorm.rvs(loc=0, scale=abs(
+            ratio))  # random.triangular(0, abs(ratio), 1)  #abs(random.normalvariate(0, abs(ratio)))
+        addition = addition / 10 if ratio > 0 else -addition / 10
+        new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
+        # ic(env.now, name, previous_var, ratio, new_value)
+
+    else:
+        _random = random.normalvariate(previous_var, (1 - past_weight))
+        new_value = max(0, min(1, _random))
 
     return new_value
 
@@ -852,7 +865,7 @@ def public_deciding_FF(name):
     previous_var = now['decision_var']
     # SorT = now['dd_SorT']['current']
 
-    ratio = previous_var
+    # ratio = previous_var
 
     if env.now - 1 - memory > 0:
         """if rationale == 'green':
@@ -870,19 +883,35 @@ def public_deciding_FF(name):
         rationale_past = AGENTS[start][name]['rationale'][0]
         if rationale_past == rationale:
             for period in range(start, end):
-                current = AGENTS[period][name]['current_state'] * ((1 - discount) ** (env.now - period))
+                current = AGENTS[period][name]['current_state'] * ((1-discount) ** (env.now - period))
                 results.append(current)
-            ratio = (np.mean(results) - results[-1]) / (max(results) - min(results)) if random.uniform(
-                0, 1) > randomness else max(0, min(1, random.normalvariate(previous_var, 1)))
+
+            denominator = max(results) - min(results)
+            if random.uniform(0, 1) > randomness:
+                if denominator > 0:
+                    ratio = (np.mean(results) - results[-1]) / denominator
+                    # ic(AGENTS[end][name]["profits"])
+                    # ic(np.mean(profits))
+                else:
+                    ratio = 0
+
+                addition = halfnorm.rvs(loc=0, scale=abs(ratio))
+                addition = addition / 10 if ratio > 0 else -addition / 10
+                new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
+
+            else:
+                _random = random.normalvariate(previous_var, (1 - past_weight))
+                new_value = max(0, min(1, _random))
         else:
-            ratio = previous_var
+            new_value = previous_var
 
         # new_value = max(0, min(1, (1 - past_weight) * ratio + past_weight * previous_var))
         # new_value = max(0, min(1, random.normalvariate(previous_var, (1 - past_weight)*ratio)))
-        addition = random.normalvariate(0, abs(ratio))
-        addition = addition if ratio > 0 else -addition
-        new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
-        # ic(name, previous_var, ratio, new_value)
+
+        # new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
+
+        """if env.now > config.FUSS_PERIOD:
+            ic(results, env.now, name, previous_var, ratio, addition, addition*10, (1 - past_weight), new_value)"""
 
     else:
         new_value = previous_var

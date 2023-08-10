@@ -110,6 +110,7 @@ class TP(object):
         self.starting_tech_age = starting_tech_age
         self.prod_cap_pct = [0, 1]
 
+        # ic(name, wallet, capacity, Technology, RnD_threshold, capacity_threshold,decision_var, cap_conditions, impatience, past_weight, LSS_thresh, memory, discount,strategy, starting_tech_age)
 
         self.action = env.process(run_TP(
             self.name,
@@ -279,7 +280,7 @@ def run_TP(name,
             Technology.update({"base_CAPEX": i})
 
         """3) now, if the TP has money, it will spend it on either capacity, imitation or innovation"""
-        # ic(name, wallet, value, env.now)
+        # ic(name, wallet, _strategy, value, env.now)
         if wallet > 0 and value > 0:
             wallet -= wallet * value
             """ having money, the TP will spend a portion (given by the value) of its wallet on something """
@@ -394,7 +395,7 @@ def run_TP(name,
                   "verdict": verdict,
                   "self_NPV": self_NPV,
                   "capped": capped,
-                  "impatience": impatience,
+                  "impatience": impatience.copy(),
                   "past_weight": past_weight,
                   "LSS_thresh": LSS_thresh,
                   "memory": memory,
@@ -404,17 +405,19 @@ def run_TP(name,
                   "shareholder_money": shareholder_money,
                   "true_innovation_index": true_innovation_index,
                   "LSS_tot": LSS_tot,
-                  "prod_cap_pct": prod_cap_pct
+                  "prod_cap_pct": prod_cap_pct,
+                  "strikables_dict": strikables_dict
                   }
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+            update["LSS_weak"] = AGENTS[env.now - 1][name]["LSS_weak"] + abs(
+                decision_var - AGENTS[env.now - 1][name]['decision_var'])
         else:
-            update["LSS_weak"] = LSS_tot
+            update["LSS_weak"] = 0
 
         AGENTS[env.now][name] = update.copy()
-        if env.now > 0:
+        if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
             # profits_dedicting_FF(name)
 
@@ -608,7 +611,7 @@ def run_TPM(genre,
             "disclosed_var": disclosed_var,
             "verdict": verdict,
             "LSS_thresh": LSS_thresh,
-            "impatience": impatience,
+            "impatience": impatience.copy(),
             "disclosed_thresh": disclosed_thresh,
             "past_weight": past_weight,
             "memory": memory,
@@ -621,12 +624,13 @@ def run_TPM(genre,
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+            update["LSS_weak"] = AGENTS[env.now - 1][name]["LSS_weak"] + abs(
+                decision_var - AGENTS[env.now - 1][name]['decision_var'])
         else:
-            update["LSS_weak"] = LSS_tot
+            update["LSS_weak"] = 0
 
         AGENTS[env.now][name] = update.copy()
-        if env.now > 0:
+        if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
@@ -864,10 +868,22 @@ def run_EPM(genre,
                         max_auction = 2000
                         min_auction = 800
 
-                        remaining_capacity = max(
-                            min(auction_capacity * entry_value * 1000 + AGENTS[env.now-1]['DD']['Remaining_demand']/24*30 + 25 * 12 * (DEMAND[env.now-1]-DEMAND[env.now-2]),
+                        auction_size = max_auction - min_auction
+                        auction_size *= entry_value
+                        auction_size += min_auction
+
+                        remaining = AGENTS[env.now-1]['DD'].copy()['Remaining_demand']/(24 * 30)
+
+                        auction_MW = max(
+                            min(
+                                auction_size
+                                + max(0, remaining),
                                 max_auction),
                             min_auction)
+
+                        # ic(env.now, auction_MW, remaining, len(possible_projects))
+
+                        remaining_capacity = auction_MW
 
                         """
                          The auction size is between 0,8 GW and 2 GW, being made of three parts:
@@ -966,7 +982,7 @@ def run_EPM(genre,
             "instrument": instrument,
             "source": source,
             "LSS_thresh": LSS_thresh,
-            "impatience": impatience,
+            "impatience": impatience.copy(),
             "disclosed_thresh": disclosed_thresh,
             "past_weight": past_weight,
             "memory": memory,
@@ -980,12 +996,13 @@ def run_EPM(genre,
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+            update["LSS_weak"] = AGENTS[env.now - 1][name]["LSS_weak"] + abs(
+                decision_var - AGENTS[env.now - 1][name]['decision_var'])
         else:
-            update["LSS_weak"] = LSS_tot
+            update["LSS_weak"] = 0
 
         AGENTS[env.now][name] = update.copy()
-        if env.now > 0:
+        if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
@@ -1254,7 +1271,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "disclosed_var": disclosed_var,
             "verdict": verdict,
             "LSS_thresh": LSS_thresh,
-            "impatience": impatience,
+            "impatience": impatience.copy(),
             "disclosed_thresh": disclosed_thresh,
             "past_weight": past_weight,
             "memory": memory,
@@ -1272,12 +1289,13 @@ def run_DBB(NPV_THRESHOLD_DBB,
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+            update["LSS_weak"] = AGENTS[env.now - 1][name]["LSS_weak"] + abs(
+                decision_var - AGENTS[env.now - 1][name]['decision_var'])
         else:
-            update["LSS_weak"] = LSS_tot
+            update["LSS_weak"] = 0
 
         AGENTS[env.now][name] = update.copy()
-        if env.now > 0:
+        if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
@@ -1497,7 +1515,7 @@ def run_BB(NPV_THRESHOLD_DBB,
         }})
 
         profits_dedicting_FF(name)
-        if env.now > 0:
+        if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
 
         yield env.timeout(1)
@@ -1545,10 +1563,11 @@ class EP(object):
         strikables_dict = {'impatience': impatience,
                            'LSS_thresh': LSS_thresh,
                            'tolerance': tolerance,
-                           'source': source,
                            'past_weight': past_weight,
                            'memory': memory,
-                           'discount': discount}
+                           'discount': discount,
+                           'source': source}
+        # print(strikables_dict)
 
         self.strikables_dict = strikable_dicting(strikables_dict)
 
@@ -1559,6 +1578,8 @@ class EP(object):
         self.LSS_tot = 0
         self.shareholder_money = 0
         self.reinvest = True
+
+        # ic(name, wallet, portfolio_of_plants, portfolio_of_projects, periodicity, tolerance, last_acquisition_period, source, decision_var, LSS_thresh, impatience, memory, discount, past_weight, current_weight)
 
         self.action = env.process(run_EP(self.env,
                                          self.genre,
@@ -1622,6 +1643,12 @@ def run_EP(env,
         #        the dictionaries that we use and other variables       #
         #                                                               #
         #################################################################
+
+        """if env.now == config.FUSS_PERIOD:
+            strikables_dict['source'] = source
+            # With this we ensure that sources are not changed during the fuss period"""
+
+        # print(strikables_dict) if env.now > config.FUSS_PERIOD else None
 
         _source = list(source[0].keys())[0] if env.now == 0 else list(AGENTS[env.now - 1][name]['source'][0].keys())[0]
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
@@ -1830,7 +1857,7 @@ def run_EP(env,
         #############################################################
         if env.now > 0 and env.now % periodicity == 0:
             mix_expansion = ((
-                                     config.INITIAL_DEMAND * value + (AGENTS[env.now - 1]['DD']['Remaining_demand'] / (24 * 30))
+                                     DEMAND.copy()[env.now-1] * value + (AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (24 * 30))
                              ) / EP_NUMBER)
             # ic(mix_expansion, value) if env.now> config.FUSS_PERIOD else None
             # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
@@ -1888,48 +1915,51 @@ def run_EP(env,
             # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the
             # whole project
             # ic(TP['TP'], name, _source) if TP['TP'] == 0 else None
-            project = TECHNOLOGIC[env.now - 1][_TP['TP']].copy()
-            # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
-            project.update({
-                'sender': name,
-                'receiver': 'EPM' if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES else bank_sending_FF(),
-                'TP': _TP['TP'],
-                'Lumps': _TP['Lumps'],
-                'old_CAPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['CAPEX'],
-                'old_OPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['OPEX'],
-                'CAPEX': _TP['CAPEX'],
-                'OPEX': _TP['OPEX'],
-                'status': 'project',
-                'capacity': _TP['Lumps'] * project['MW'],
-                'MWh': _TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
-                'avoided_emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['avoided_emissions'] * _TP['Lumps'],
-                'emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['emissions'] * _TP['Lumps'],
-                'guarantee': False
-            })
-            if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
-                # print('sending to EPM for auction')
-                project.update(
-                    {'status': 'bidded',
-                     'price': (
-                                      project['OPEX'] + (project['CAPEX'] / project['lifetime'])
-                              ) * (2 + config.MARGIN - value) / project['MWh'],
-                     'receiver': 'EPM'})
-            else:
-                project['status'] = 'project'
-                project['auction_contracted'] = False
-            # print(_TP['source_of_TP'], AUCTION_WANTED_SOURCES, _TP['source_of_TP'] in AUCTION_WANTED_SOURCES)
-            code = uuid.uuid4().int
-            project['code'] = code
+            if _TP['TP'] != 0:
+                project = TECHNOLOGIC[env.now - 1][_TP['TP']].copy()
+                # we have to use .copy() here to avoid changing the TECHNOLOGIC dictionary entry
+                project.update({
+                    'sender': name,
+                    'receiver': 'EPM' if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES else bank_sending_FF(),
+                    'TP': _TP['TP'],
+                    'Lumps': _TP['Lumps'],
+                    'old_CAPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['CAPEX'],
+                    'old_OPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['OPEX'],
+                    'CAPEX': _TP['CAPEX'],
+                    'OPEX': _TP['OPEX'],
+                    'status': 'project',
+                    'capacity': _TP['Lumps'] * project['MW'],
+                    'MWh': _TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
+                    'avoided_emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['avoided_emissions'] * _TP['Lumps'],
+                    'emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['emissions'] * _TP['Lumps'],
+                    'guarantee': False
+                })
+                if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
+                    # print('sending to EPM for auction')
+                    project.update(
+                        {'status': 'bidded',
+                         'price': round((
+                                          project['OPEX'] + (project['CAPEX'] / project['lifetime'])
+                                  ) * (2 + config.MARGIN - value) / project['MWh'],
+                                        3),
+                         'receiver': 'EPM'})
+                else:
+                    project['status'] = 'project'
+                    project['auction_contracted'] = False
+                # print(_TP['source_of_TP'], AUCTION_WANTED_SOURCES, _TP['source_of_TP'] in AUCTION_WANTED_SOURCES)
+                code = uuid.uuid4().int
+                project['code'] = code
 
-            if config.BB_NUMBER > 0 or _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
-                # print('sent')
-                CONTRACTS[env.now][code] = project
-                # ic(name, project)
+                if config.BB_NUMBER > 0 or _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
+                    # print('sent')
+                    CONTRACTS[env.now][code] = project
+                    # ic(name, project)
+                else:
+                    # If there are no banks and no current auctions, the project goes straight to the reinvestment
+                    # possibility
+                    portfolio_of_projects.update({code: project})
             else:
-                # If there are no banks and no current auctions, the project goes straight to the reinvestment
-                # possibility
-                portfolio_of_projects.update({code: project})
-
+                print(env.now, name, _TP, _source)
         # print(portfolio_of_projects, name)
 
         _to_pop = []
@@ -2028,7 +2058,7 @@ def run_EP(env,
                   "source": source,
                   "decision_var": decision_var,
                   "LSS_thresh": LSS_thresh,
-                  "impatience": impatience,
+                  "impatience": impatience.copy(),
                   "memory": memory,
                   "discount": discount,
                   "past_weight": past_weight,
@@ -2044,13 +2074,14 @@ def run_EP(env,
 
         if env.now > 1:
             update['impatience'][0] = max(1, update['impatience'][0] + decisions['impatience_increase'])
-            update["LSS_weak"] = LSS_tot + decision_var - AGENTS[env.now - 1][name]['decision_var']
+            update["LSS_weak"] = AGENTS[env.now - 1][name]["LSS_weak"] + abs(
+                decision_var - AGENTS[env.now - 1][name]['decision_var'])
         else:
-            update["LSS_weak"] = LSS_tot
+            update["LSS_weak"] = 0
 
         AGENTS[env.now][name] = update.copy()
 
-        if env.now > 0:
+        if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
             profits_dedicting_FF(name)
 
@@ -2062,7 +2093,7 @@ class Demand(object):
         self.env = env
         self.genre = 'DD'
         self.name = 'DD'
-        self.initial_demand = initial_demand
+        self.initial_demand = [initial_demand].copy()[0]
         self.when = when
         self.increase = increase
         self.Demand_by_source = {0: 0, 1:0, 2:0}
@@ -2107,10 +2138,11 @@ def run_DD(env,
 
         if env.now == 0:
             DEMAND.update({env.now: initial_demand})
-            # printable = 'seed is ' + str(config.seed)
+            printable = 'seed is ' + str(config.seed)
             # print(printable)
 
         elif env.now % when == 0:
+            # print(env.now)
             """ first, we get how much green is E or M"""
             """greeness = {'E': 0, 'M': 0}
             total = 0
@@ -2136,10 +2168,10 @@ def run_DD(env,
             M_pendulum *= pendulum_demand
             M_increase = DEMAND[env.now - 1]['M'] * specificities['increase'] + M_pendulum"""
 
-            DEMAND.update({env.now: DEMAND[env.now - 1] + increase})
+            DEMAND.update({env.now: DEMAND.copy()[env.now - 1] + increase})
 
         else:
-            DEMAND.update({env.now: DEMAND[env.now - 1]})
+            DEMAND.update({env.now: DEMAND.copy()[env.now - 1]})
 
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
         demand = DEMAND.copy()[env.now] * 24 * 30
@@ -2151,7 +2183,7 @@ def run_DD(env,
             possible_projects = []
             for _ in MIX[env.now]:
                 """ we build the list of possible projects, i.e., projects deployed or already built"""
-                j = MIX[env.now][_]
+                j = MIX[env.now][_].copy()
                 if j['status'] == 'built' or j['status'] == 'contracted':
                     possible_projects.append(j)
             """ now, we sort the list of dictionaries in terms of dispatchability and then OPEX (respecting the merit order)"""
@@ -2159,7 +2191,7 @@ def run_DD(env,
             chosen = []
             # print('full demand is ', demand)
             for plant in possible_projects:
-                if demand < 0:
+                if plant['source'] == 0 and demand < 0:
                     """ if there is no more demand to be supplied, then the plant is not contracted"""
                     MIX[env.now][plant['code']].update({
                         'status': 'built'
@@ -2183,14 +2215,15 @@ def run_DD(env,
                 """ if the plant is auction contracted, then we do not mess with its price"""
                 if 'auction_contracted' not in i or i['auction_contracted'] is False:
                     MIX[env.now][i['code']].update({
-                        'price': price})
+                        'price': round(price, 3)})
 
             _Price = weighting_FF(env.now, 'price', 'MWh', MIX) if len(MIX[env.now]) > 0 else config.STARTING_PRICE
+            # ic(env.now, increase, demand, DEMAND[env.now], _Price)
 
         AGENTS[env.now][name] = {
             'name': name,
             'genre': 'DD',
-            'Demand': DEMAND[env.now],
+            'Demand': DEMAND.copy()[env.now],
             'Remaining_demand': demand,
             'Demand_by_source': Demand_by_source,
             'Price': _Price}
@@ -2237,7 +2270,7 @@ def run_HH(env,
             if agent['genre'] in ['DBB', 'EPM']:
                 list_of_pm.append(agent)
 
-        if len(list_of_pm) > 1:
+        if len(list_of_pm) > 1 and env.now>0:
 
             # That means we have a EPM and a DBB
 
@@ -2259,30 +2292,51 @@ def run_HH(env,
                     if AGENTS[env.now]['BNDES'][entry] != AGENTS[env.now]['EPM'][entry]:
                         # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
                         chosen_entries.append(entry)
+
+                elif entry == 'source':
+                    if list(AGENTS[env.now]['BNDES'][entry][0].keys()) != list(AGENTS[env.now]['EPM'][entry][0].keys()):
+                        # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
+                        chosen_entries.append(entry)
+
                 else:
                     if AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now]['EPM'][entry][0]:
                         # print(AGENTS[env.now]['BNDES'][entry][0], AGENTS[env.now]['EPM'][entry][0])
                         chosen_entries.append(entry)
 
+
             if len(chosen_entries) > 0 and len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
                 # above the threshold and above the heterogeneity test, so we have to homogenize things
+                random.shuffle(chosen_entries)
+                ratio = len(chosen_entries)/len(list_o_entries)
                 for entry in chosen_entries:
-                    if env.now > 0:
-                        current_bndes_var =  AGENTS[env.now]['BNDES'][entry][0]     if entry != 'disclosed_var' else AGENTS[env.now]['BNDES'][entry]
-                        previous_bndes_var = AGENTS[env.now - 1]['BNDES'][entry][0] if entry != 'disclosed_var' else AGENTS[env.now - 1]['BNDES'][entry]
-                        current_epm_var =    AGENTS[env.now]['EPM'][entry][0]       if entry != 'disclosed_var' else AGENTS[env.now]['EPM'][entry]
-                        previous_epm_var =   AGENTS[env.now - 1]['EPM'][entry][0]   if entry != 'disclosed_var' else AGENTS[env.now - 1]['EPM'][entry]
+                    if env.now > 0 and ratio > hetero_threshold:
+                        ratio -= 1/len(list_o_entries)
+                        if entry == 'disclosed_var':
+                            current_bndes_var = AGENTS[env.now]['BNDES'][entry]
+                            previous_bndes_var = AGENTS[env.now - 1]['BNDES'][entry]
+                            current_epm_var = AGENTS[env.now]['EPM'][entry]
+                            previous_epm_var = AGENTS[env.now - 1]['EPM'][entry]
+                        elif entry == 'source':
+                            current_bndes_var = list(AGENTS[env.now]['BNDES'][entry][0].keys())
+                            previous_bndes_var = list(AGENTS[env.now - 1]['BNDES'][entry][0].keys())
+                            current_epm_var = list(AGENTS[env.now]['EPM'][entry][0].keys())
+                            previous_epm_var = list(AGENTS[env.now - 1]['EPM'][entry][0].keys())
+
+                        else:
+                            current_bndes_var = AGENTS[env.now]['BNDES'][entry][0]
+                            previous_bndes_var = AGENTS[env.now - 1]['BNDES'][entry][0]
+                            current_epm_var = AGENTS[env.now]['EPM'][entry][0]
+                            previous_epm_var = AGENTS[env.now - 1]['EPM'][entry][0]
+
                     else:
                         current_bndes_var = previous_bndes_var = current_epm_var = previous_epm_var = 0
 
+                    who = []
                     if randomly is False:
-                        who = []
                         if env.now > 0 and current_bndes_var != previous_bndes_var:
                             who.append('BNDES')
                         elif env.now > 0 and current_epm_var != previous_epm_var:
                             who.append('EPM')
-                    else:
-                        who = []  # just to avoid errors
 
                     if randomly is True or env.now == 0 or len(who) > 1:
                         # If random is True, then it is randomized
@@ -2292,29 +2346,38 @@ def run_HH(env,
                         """
                         It is best to just copy the whole list to avoid destroying entries
                         """
-
                         chosen_agent = random.choice(['BNDES', 'EPM'])
+                        if entry != 'source':
+                            chosen = AGENTS[env.now][chosen_agent][entry]
 
-                        chosen = AGENTS[env.now][chosen_agent][entry]
-
-                        AGENTS[env.now]['BNDES'][entry] = chosen
-                        AGENTS[env.now]['EPM'][entry] = chosen
-
-                        """var = AGENTS[env.now]['BNDES'][entry][0] if 
-
-                        AGENTS[env.now][chosen_agent]['LSS_tot'] -= 1 if env.now > 0 and  else 0
-                        AGENTS[env.now][chosen_agent]['LSS_weak'] -= 1 if env.now > 0 and  else 0"""
-
-                    else:
+                            AGENTS[env.now]['BNDES'][entry] = chosen
+                            AGENTS[env.now]['EPM'][entry] = chosen
+                        else:
+                            AGENTS[env.now][chosen_agent][entry] = AGENTS[env.now][chosen_agent][entry][::-1]
 
                         # If it's not random, then we have to change to the most updated one
 
                         who_else = ['EPM', 'BNDES']
                         who_else.remove(who[0])
 
-                        AGENTS[env.now][who_else[0]][entry] = AGENTS[env.now][who[0]][entry]
+                        if entry != 'source':
+                            AGENTS[env.now][who_else[0]][entry] = AGENTS[env.now][who[0]][entry]
+                        else:
+                            AGENTS[env.now][who_else[0]][entry] = AGENTS[env.now][who_else[0]][entry][::-1]
 
-                        # print(AGENTS[env.now][who_else[0]][entry], AGENTS[env.now][who[0]][entry], 'equal?')
+                bndes_lss_cond = AGENTS[env.now]['BNDES']['LSS_tot'] > AGENTS[env.now - 1]['BNDES']['LSS_tot']
+                epm_lss_cond = AGENTS[env.now]['EPM']['LSS_tot'] > AGENTS[env.now - 1]['EPM']['LSS_tot']
+                if bndes_lss_cond is True and epm_lss_cond is True:
+                    # if both policy makers adapted, then it really doesn't matter who we decrease the LSS count
+                    chosen_agent = random.choice(['BNDES', 'EPM'])
+                    AGENTS[env.now][chosen_agent]['LSS_tot'] -= 1
+
+                """elif bndes_lss_cond is True or epm_lss_cond is True:
+                    # if just one adapted, then we decrease its LSS
+                    chosen_agent = 'BNDES' if bndes_lss_cond is True else 'EPM'
+                    AGENTS[env.now][chosen_agent]['LSS_tot'] -= 1"""
+
+                # print(AGENTS[env.now][who_else[0]][entry], AGENTS[env.now][who[0]][entry], 'equal?')
 
                 AGENTS[env.now]['DD']['homo'] = True  # Just to say that things were changed
                 # print(env.now, 'HOMO')
@@ -2323,3 +2386,179 @@ def run_HH(env,
                 AGENTS[env.now]['DD']['homo'] = False
 
         yield env.timeout(1)
+
+
+#################################################################
+#                                                               #
+#                      CREATION EQUATIONS                       #
+#                                                               #
+#################################################################
+
+def make_ep(env,
+            name=None,
+            wallet=None,
+            tolerance=None,
+            source=None,
+            decision_var=None,
+            LSS_thresh=None,
+            impatience=None,
+            memory=None,
+            discount=None,
+            past_weight=None,
+            current_weight=None,
+            periodicity=None,
+            green_ep = 0.25
+            ):
+
+    """
+
+    :param green_ep:
+    :param periodicity:
+    :param name:
+    :param wallet:
+    :param tolerance:
+    :param source:
+    :param decision_var:
+    :param LSS_thresh:
+    :param impatience:
+    :param memory:
+    :param discount:
+    :param past_weight:
+    :param current_weight:
+    :return:
+    """
+    if name is None:
+        name = 'EP_' + str(uuid.uuid4().hex)
+
+    if wallet is None:
+        wallet = random.uniform(0, 2) * 10 ** 8
+    if decision_var is None:
+        decision_var = random.uniform(0, 1)
+    if current_weight is None:
+        current_weight = [0.25, 0.5, .75]
+        random.shuffle(current_weight)
+    if past_weight is None:
+        past_weight = [0.25, 0.5, .75]
+        random.shuffle(past_weight)
+    if memory is None:
+        memory = [int(random.uniform(3, 24))]
+    if impatience is None:
+        impatience = [int(random.uniform(1, 5))]
+    if LSS_thresh is None:
+        LSS_thresh = [0.25, 0.5, .75]
+        random.shuffle(LSS_thresh)
+    if source is None:
+        source = [{1: random.uniform(0, 500)}, {2: random.uniform(0, 500)}]
+        random.shuffle(source)
+        if random.uniform(0,1) < green_ep:
+            source.append({0: random.uniform(0, 1000)})
+        else:
+            source = [{0: random.uniform(0, 1000)}] + source
+
+    if tolerance is None:
+        tolerance = [int(random.uniform(6, 12))]
+    if periodicity is None:
+        periodicity = int(random.uniform(3, 12))
+    if discount is None:
+        discount = [random.uniform(0.00001, 0.0001)]
+
+    return EP(env=env,
+              name=name,
+              wallet=wallet,
+              portfolio_of_plants={},
+              portfolio_of_projects={},
+              periodicity=periodicity,
+              tolerance=tolerance,
+              last_acquisition_period=0,
+              source=source,
+              decision_var=decision_var,
+              LSS_thresh=LSS_thresh,
+              impatience=impatience,
+              memory=memory,
+              discount=discount,
+              past_weight=past_weight,
+              current_weight=current_weight)
+
+def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_threshold=None, capacity_threshold=None, decision_var=None, cap_conditions=None, impatience=None, past_weight=None, LSS_thresh=None, memory=None, discount=None, strategy=None, starting_tech_age=None):
+
+    if name is None:
+        name = 'TP_' + str(uuid.uuid4().hex)
+    if source is None:
+        source = random.choice([1,2])
+
+    if wallet is None:
+        wallet = random.uniform(1, 3)*10**6 if source == 1 else random.uniform(1, 2)*10**6
+
+    if capacity is None:
+        capacity = random.uniform(10, 20)*10**3 if source == 1 else random.uniform(1, 2)*10**6
+
+    if RnD_threshold is None:
+        RnD_threshold = random.uniform(2, 5)
+
+    if capacity_threshold is None:
+        capacity_threshold = random.uniform(2, 5)
+
+    if decision_var is None:
+        decision_var = random.uniform(0, 1)
+
+    if cap_conditions is None:
+        cap_conditions = {}
+
+    if impatience is None:
+        impatience = [int(random.uniform(1, 5))]
+
+    if past_weight is None:
+        past_weight = random.sample([0.25, 0.5, 0.75], 2)
+
+    if LSS_thresh is None:
+        LSS_thresh = random.sample([0.25, 0.5, 0.75], 2)
+
+    if memory is None:
+        memory = [int(random.uniform(3, 24))]
+
+    if discount is None:
+        discount = [random.uniform(0.00001, 0.0001)]
+
+    if strategy is None:
+        strategy = random.sample(['capacity', "innovation"], 2)
+
+    if starting_tech_age is None:
+        starting_tech_age = 3 if source == 1 else 1
+
+    return TP(
+        env=env,
+        name=name,
+        wallet=random.uniform(1, 3)*10**6,
+        capacity=random.uniform(10, 20)*10**3,
+        Technology={'name': name,
+                    "green": True,
+                    "source": source,
+                    "source_name": 'wind' if source == 1 else 'solar',
+                    "CAPEX": config.WIND['CAPEX'] if source == 1 else config.SOLAR['CAPEX'],
+                    'OPEX': config.WIND['OPEX'] if source == 1 else config.SOLAR['OPEX'],
+                    "dispatchable": False,
+                    "transport": False if source == 1 else True,
+                    "CF": config.WIND['CF'] if source == 1 else config.SOLAR['CF'],
+                    "MW": config.WIND['MW'] if source == 1 else config.SOLAR['MW'],
+                    "lifetime": config.WIND['lifetime'] if source == 1 else config.SOLAR['lifetime'],
+                    'building_time': config.WIND['building_time'] if source == 1 else config.SOLAR['building_time'],
+                    'last_radical_innovation': 0,
+                    'last_marginal_innovation': 0,
+                    'emissions': 0,
+                    'avoided_emissions': config.THERMAL['emissions'] * (
+                            config.WIND['MW'] * config.WIND['CF'] /
+                            config.THERMAL['MW'] * config.THERMAL['CF']) if source == 1 else config.THERMAL['emissions'] * (
+                            config.SOLAR['MW'] * config.SOLAR['CF'] /
+                            config.THERMAL['MW'] * config.THERMAL['CF']
+                    )},
+        RnD_threshold=RnD_threshold,
+        capacity_threshold=capacity_threshold,
+        decision_var=decision_var,
+        cap_conditions=cap_conditions,
+        impatience=impatience,
+        past_weight=past_weight,
+        LSS_thresh=LSS_thresh,
+        memory=memory,
+        discount=discount,
+        strategy=strategy,
+        starting_tech_age=starting_tech_age)

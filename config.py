@@ -14,6 +14,6 @@ import simpy
 # !pip install simpy #on colab it must be this pip install thing, dunno why
 
 
-import _config____NONE_YES_YES
-reload(_config____NONE_YES_YES)
-from   _config____NONE_YES_YES import *
+import _config____1_YES_NO
+reload(_config____1_YES_NO)
+from   _config____1_YES_NO import *
