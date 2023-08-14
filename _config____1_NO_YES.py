@@ -281,7 +281,7 @@ NPV_THRESHOLD = 0
 NPV_THRESHOLD_DBB = 0
 INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 120: [0, 1, 2]}
 BASEL = 0.105
-MARGIN = 4.5
+MARGIN = .5
 INITIAL_DEMAND = 3.5 * 10 ** 4
 STARTING_PRICE = 11
 RADICAL_THRESHOLD = 2
@@ -302,7 +302,7 @@ THERMAL = {
     "CAPEX": 1000000,
     'OPEX': 30000,
     "MW": 30,
-    'CF': .7,
+    'CF': .5,
     "lifetime": 30 * 12,
     'building_time': 24,
     'emissions': 100
@@ -336,7 +336,7 @@ for j in range(SIM_TIME):
                                            "source_name": 'thermal',
                                            "CAPEX": THERMAL.get("CAPEX"),
                                            'OPEX': THERMAL.get('OPEX'),
-                                           "dispatchable": True,
+                                           "dispatchable": False,
                                            "transport": False,
                                            "CF": THERMAL.get("CF"),
                                            "MW": THERMAL.get("MW"),

@@ -22,6 +22,30 @@ def bla():
     return
 
 
+def normalize(_list):
+
+    _list = np.array(_list)
+
+    min_var = min(_list)
+    if np.any(_list < 0):
+
+        _list = _list + abs(min_var)
+        min_var = 0
+    # print(min_var)
+    max_var = max(_list)
+
+    denominator = (max_var - min_var) if max_var != min_var else 1
+    # print(_list)
+    _list = _list - min_var
+    # print(_list)
+    _list = _list / denominator
+    # print(_list)
+
+    # _list = [(i - min_var)/denominator for i in _list]
+
+    return _list
+
+
 def scheduling_FF(dictionary, time, changes):
     """    This function changes a dictionary entry of a certain time to a certain value. It is useful to change
      dictionaries, reload agents from dictionaries and continue the simulation
@@ -287,7 +311,7 @@ def private_reporting_FF(genre):
     :param EorM:
     :return:
     """
-    r, TECHNOLOGIC, AGENTS, DEMAND, env, AMMORT = config.r, config.TECHNOLOGIC, config.AGENTS, config.DEMAND, config.env, config.AMMORT
+    r, TECHNOLOGIC, AGENTS, DEMAND, MIX, env, AMMORT = config.r, config.TECHNOLOGIC, config.AGENTS, config.DEMAND, config.MIX, config.env, config.AMMORT
 
     backward_dict, forward_dict = {}, {}
 
@@ -303,19 +327,25 @@ def private_reporting_FF(genre):
 
     for TP in TECHNOLOGIC.get(env.now - 1):
         # we have the highest MW in order to compare things, the maximum price
-        technology = TECHNOLOGIC.get(env.now - 1).get(TP)
+        technology = TECHNOLOGIC[env.now - 1][TP].copy()
         demand_now = DEMAND.copy().get(env.now - 1)  # .get(technology.get('EorM'))
-        max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'source': source})['value']
+        source = technology['source']
+        max_price = max(
+            finding_FF(MIX.get(env.now - 1), 'price', 'highest', {'source': source})['value'],
+            finding_FF(MIX.get(env.now - 1), 'price', 'highest')['value']
+        )
         # max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM})[
         # 'value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to
         # the get the highest price for the eletrcitity or molecule part.
         lumps = np.floor(demand_now / technology['MW'])
 
         NPV = npv_generating_FF(r, technology.get('lifetime'), lumps, technology.get('MW'),
-                                technology.get('building_time'), technology.get('CAPEX') * lumps,
-                                technology.get('OPEX') * lumps, max_price, technology.get('CF'), AMMORT)
+                                technology.get('building_time'), technology.get('CAPEX'),
+                                technology.get('OPEX'), max_price, technology.get('CF'), AMMORT)
 
-        if technology['source'] in Sources and NPV > forward_dict[technology['source']]:
+        # print(env.now, source, max_price, lumps, NPV)
+
+        if NPV > forward_dict[technology['source']]:
             forward_dict.update({technology['source']: NPV})
             chosen_TP.update({technology['source']: TP})
 
@@ -334,8 +364,15 @@ def private_reporting_FF(genre):
         specific_profits = 'profits' + str(source)  # we have to get the profits for that source of the
         current = finding_FF(AGENTS.get(env.now - 1), specific_profits, 'sum',
                              {'genre': genre})['value']  # we now have the current profits for that source in that agent
+        # print(current)
         current += Sources[source]  # we now add to the current profits what we had
         backward_dict.update({source: current})  # and update the backward_dict dictionary
+    # print(backward_dict, forward_dict)
+
+    for source in config.RISKS:
+        # backward_dict[source] *= (1 - config.RISKS[source])
+        forward_dict[source] *= (1 - config.RISKS[source])
+        # print(config.RISKS)
 
     return {"backward_dict": backward_dict, "forward_dict": forward_dict}
 
@@ -432,13 +469,14 @@ def sourcing_FF(backward_dict, forward_dict, backwardness, index_dict=None):
 
     for source in back:
 
-        source_back = max(0, np.random.normal(back[source], back_std))
-        source_forw = max(0, np.random.normal(forw[source], forw_std))
+        source_back = np.random.normal(back[source], back_std)
+        source_forw = np.random.normal(forw[source], forw_std)
 
         # ic(source, source_back, back[source], source_forw, forw[source])
 
         new_dd_source[source] = index_dict[source] * (bwd * source_back + (1 - bwd) * source_forw)
-
+    """if config.env.now > config.FUSS_PERIOD:
+        print(new_dd_source)"""
     return new_dd_source
 
 
@@ -613,62 +651,67 @@ def evaluating_FF(name, add=None, change=None):
     strikes = False
     impatience_increase = 0
 
-    # if there is more time than the memory, then the agents do things and we can look into things now
-    present, hist = [], []  # first we start these two numbers, they'll be used for the ratio
-    if genre in ['DBB', 'TPM', 'EPM']:
-        # we are dealing with public agents
-        # eta_acc = AGENTS_r[name][env.now - 1]['dd_eta']['current']
-        # target = AGENTS_r[name][env.now - 1]['dd_target']['current']
-        # present = AGENTS[env.now - 1][name]['current_state']
-        # before = 0
-        start = max(0, env.now - 1 - 2*memory)
-        end = env.now - 1
-        for time in range(start, end):
-            _append = AGENTS[time][name]['current_state'] * ((1 - discount) ** (env.now - time))
-            _to_append = hist if time < env.now - 1 - memory else present
-            _to_append.append(_append)
-        # increase = (current - before) / before
-        # eta_exp = target / ((1 + increase) * current)
-    else:
-        # we are dealing with private agents
-        for time in range(max(0, env.now - 1 - memory), env.now-1):
-            for _ in AGENTS[time]:
-                i = AGENTS[time][_]
-
-                if i['genre'] == genre:
-                    _append = i['profits'] * ((1 - discount) ** (env.now - time))
-                    if i['name'] == name:
-                        _to_append = present
-                    else:
-                        _to_append = hist
-
-                    _to_append.append(_append)
-        # present += AGENTS[env.now-1][name]['profits']
-
     if random.uniform(0, 1) > randomness:
-        # ic(present, np.mean(hist))
-        if np.mean(present) > (1 + LSS_thresh) * np.mean(hist):
-            # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
-            # current is better than hist, so now we run the distribution
-            verdict = 'add' if add[genre] is True else 'keep'
-            impatience_increase = -1
-            ratio = np.mean(hist) / np.mean(present)
-        elif np.mean(present) < (1 - LSS_thresh) * np.mean(hist):
-            # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
-            # current is better than hist, so now we run the distribution
-            verdict = 'change' if change[genre] is True else 'keep'
-            impatience_increase = 1
-            ratio = np.mean(present) / np.mean(hist)
-        else:
-            ratio = 1
 
-        # ic(name, env.now, ratio, np.mean(present), np.mean(hist), verdict)
-        for attempt in range(1, impatience):
-            dist = np.random.beta(1, 3)
-            if dist > ratio:
-                # ic(name, env.now, dist, ratio, np.mean(present), np.mean(hist), verdict)
-                strikes = True
-                break
+        # if there is more time than the memory, then the agents do things and we can look into things now
+        present, hist = [], []  # first we start these two numbers, they'll be used for the ratio
+        if genre in ['DBB', 'TPM', 'EPM']:
+            # we are dealing with public agents
+            # eta_acc = AGENTS_r[name][env.now - 1]['dd_eta']['current']
+            # target = AGENTS_r[name][env.now - 1]['dd_target']['current']
+            # present = AGENTS[env.now - 1][name]['current_state']
+            # before = 0
+            start = max(0, env.now - 1 - 2 * memory)
+            end = env.now - 1
+            for time in range(start, end):
+                _append = AGENTS[time][name]['current_state'] * ((1 - discount) ** (env.now - time))
+                _to_append = hist if time < env.now - 1 - memory else present
+                _to_append.append(_append)
+            # increase = (current - before) / before
+            # eta_exp = target / ((1 + increase) * current)
+        else:
+            # we are dealing with private agents
+            for time in range(max(0, env.now - 1 - memory), env.now - 1):
+                for _ in AGENTS[time]:
+                    i = AGENTS[time][_]
+
+                    if i['genre'] == genre:
+                        _append = i['profits'] * ((1 - discount) ** (env.now - time))
+                        if i['name'] == name:
+                            _to_append = present
+                        else:
+                            _to_append = hist
+
+                        _to_append.append(_append)
+            # present += AGENTS[env.now-1][name]['profits']
+
+        # ic(present, np.mean(hist))
+        upper_cond = np.mean(present) > (1 + LSS_thresh) * np.mean(hist)
+        lower_cond = np.mean(present) < (1 - LSS_thresh) * np.mean(hist)
+
+        if upper_cond is True or lower_cond is True:
+            if upper_cond is True:
+                # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
+                # current is better than hist, so now we run the distribution
+                verdict = 'add' if add[genre] is True else 'keep'
+                impatience_increase = -1
+                ratio = np.mean(hist) / np.mean(present)
+            elif lower_cond is True:
+                # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
+                # current is better than hist, so now we run the distribution
+                verdict = 'change' if change[genre] is True else 'keep'
+                impatience_increase = 1
+                ratio = np.mean(present) / np.mean(hist)
+            else:
+                print('deu ruim')
+
+            # ic(name, env.now, ratio, np.mean(present), np.mean(hist), verdict)
+            for attempt in range(1, impatience):
+                dist = np.random.beta(1, 3)
+                if dist > ratio:
+                    # ic(name, env.now, dist, ratio, np.mean(present), np.mean(hist), verdict)
+                    strikes = True
+                    break
 
     else:
         choice_list = ['keep']
@@ -741,12 +784,25 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
 
         striked = random.choice(list(strikables_dict.keys()))
 
-        options = strikables_dict[striked].copy() # to avoid changing the actual dictionary
+        options = strikables_dict[striked].copy()  # to avoid changing the actual dictionary
         previous = strikables_dict[striked].copy()
-        chosen = int(random.uniform(0, len(options))) if striked != 'source' else min(int(
-            np.random.poisson(1)), len(options)-1)
-        chosen_entry = strikables_dict[striked][chosen] if striked != 'source' else sorted(
-            strikables_dict[striked], reverse=True, key=lambda x: list(x.values())[0])[chosen]
+        if striked != 'source':
+            chosen = int(random.uniform(0, len(options)))
+            chosen_entry = strikables_dict[striked][chosen]
+        else:
+
+            _list = [list(x.values())[0] for x in strikables_dict[striked]]
+            # _list = normalize(_list)
+            _sources = [list(x.keys())[0] for x in strikables_dict[striked]]
+
+            chosen_entry = strikables_dict[striked][_list.index(max(_list))]
+
+            """chosen = min(int(
+                np.random.poisson(1)), len(options) - 1)"""
+
+            # print(name, 'went from ', _sources[0], ' to ',  chosen_entry)
+
+            #chosen_entry = sorted(strikables_dict[striked], reverse=True, key=lambda x: list(x.values())[0])[chosen]
 
         # print('before striking', strikables_dict[striked]) if striked == "source" else None
         options.remove(chosen_entry)
@@ -788,51 +844,53 @@ def private_deciding_FF(name):
     AGENTS, env = config.AGENTS, config.env
 
     randomness = config.RANDOMNESS
-
     agent = AGENTS[env.now - 1][name].copy()
-    memory = agent['memory'][0]
-    discount = agent['discount'][0]
     past_weight = agent['past_weight'][0]
     previous_var = agent['decision_var']
 
-    if env.now - 1 - memory < 0:
+    """if env.now - 1 - memory < 0:
         # we cannot search in negative periods
         start = 0
         end = env.now + memory  # we have to search unsimulated periods to get zero results and keep the ratio
     else:
         start = env.now - 1 - memory
-        end = env.now - 1
-
-    genre = AGENTS[env.now - 1][name]["genre"]
-
-    profits = []
-
-    for period in range(start, end):
-        for _ in AGENTS[period]:
-            i = AGENTS[period][_]
-
-            if i['genre'] == genre:
-                profits.append(i['profits'] * ((1 - discount) ** (end - period)))
-
-            """ profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * (
-                    (1 - discount) ** (end - 1 - period)))"""
-            """medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * (
-                    (1 - discount) ** (end - 1 - period)))"""
-
-    denominator = (max(profits) - min(profits))
+        end = env.now - 1"""
 
     if random.uniform(0, 1) > randomness:
-        if denominator > 0:
-            ratio = (np.mean(profits) - AGENTS[end][name]["profits"]) / denominator
-            # ic(AGENTS[end][name]["profits"])
-            # ic(np.mean(profits))
-        else:
-            ratio = 0
+
+        memory = agent['memory'][0]
+        discount = agent['discount'][0]
+        genre = AGENTS[env.now - 1][name]["genre"]
+
+        start = max(0, env.now - 1 - memory)
+        end = env.now - 1
+
+        profits = []
+
+        for period in range(start, end+1):
+            for _ in AGENTS[period]:
+                i = AGENTS[period][_]
+
+                if i['genre'] == genre:
+                    profits.append(i['profits'] * ((1 - discount) ** (end - period)))
+
+                """ profits.append(finding_FF(AGENTS[period], 'profits', i, {'genre': genre})['value'] * (
+                        (1 - discount) ** (end - 1 - period)))"""
+                """medians.append(finding_FF(AGENTS[period], 'profits', 'median', {'genre': genre})['value'] * (
+                        (1 - discount) ** (end - 1 - period)))"""
+        # print(env.now, AGENTS[end][name]["profits"], AGENTS[end][name]["profits"] * ((1 - discount) ** (end - end)))
+        # print(profits)
+        profits.remove(AGENTS[end][name]["profits"])
+        profits += [AGENTS[end][name]["profits"]]  # with this we ensure that our profits is the last one
+        profits = normalize(profits)
+        ratio = (np.mean(profits) - profits[-1])
+        # ic(AGENTS[end][name]["profits"])
+        # ic(np.mean(profits))
 
         # new_value = max(0, min(1, (1 - past_weight) * ratio + past_weight * previous_var, 1))
         addition = halfnorm.rvs(loc=0, scale=abs(
             ratio))  # random.triangular(0, abs(ratio), 1)  #abs(random.normalvariate(0, abs(ratio)))
-        addition = addition / 10 if ratio > 0 else -addition / 10
+        addition = addition / config.doug if ratio > 0 else -addition / config.doug
         new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
         # ic(env.now, name, previous_var, ratio, new_value)
 
@@ -866,8 +924,7 @@ def public_deciding_FF(name):
     # SorT = now['dd_SorT']['current']
 
     # ratio = previous_var
-
-    if env.now - 1 - memory > 0:
+    if random.uniform(0, 1) > randomness:
         """if rationale == 'green':
             # the policy maker wants less emissions
             dictionary = MIX
@@ -878,7 +935,7 @@ def public_deciding_FF(name):
             restriction = {'genre': 'TP'}
             rationale = 'RandD' if rationale == 'innovation' else 'capacity'"""
         results = []
-        start = max(1, env.now - 1 - memory)
+        start = max(0, env.now - 1 - memory)
         end = env.now
         rationale_past = AGENTS[start][name]['rationale'][0]
         if rationale_past == rationale:
@@ -886,22 +943,12 @@ def public_deciding_FF(name):
                 current = AGENTS[period][name]['current_state'] * ((1-discount) ** (env.now - period))
                 results.append(current)
 
-            denominator = max(results) - min(results)
-            if random.uniform(0, 1) > randomness:
-                if denominator > 0:
-                    ratio = (np.mean(results) - results[-1]) / denominator
-                    # ic(AGENTS[end][name]["profits"])
-                    # ic(np.mean(profits))
-                else:
-                    ratio = 0
+            results = normalize(results)
+            ratio = (np.mean(results) - results[-1])
+            addition = halfnorm.rvs(loc=0, scale=abs(ratio))
+            addition = addition / config.doug if ratio > 0 else -addition / config.doug
+            new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
 
-                addition = halfnorm.rvs(loc=0, scale=abs(ratio))
-                addition = addition / 10 if ratio > 0 else -addition / 10
-                new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
-
-            else:
-                _random = random.normalvariate(previous_var, (1 - past_weight))
-                new_value = max(0, min(1, _random))
         else:
             new_value = previous_var
 
@@ -914,7 +961,8 @@ def public_deciding_FF(name):
             ic(results, env.now, name, previous_var, ratio, addition, addition*10, (1 - past_weight), new_value)"""
 
     else:
-        new_value = previous_var
+        _random = random.normalvariate(previous_var, (1 - past_weight))
+        new_value = max(0, min(1, _random))
 
     return new_value
 
@@ -1078,9 +1126,9 @@ def capital_adequacy_rationing_FF(receivables_dict, wallet):
     """
     BASEL, RISKS, MIX, env = config.BASEL, config.RISKS, config.MIX, config.env
 
-    risk_dict = {0: 0, 1: 0, 2: 0}
+    risk_dict = RISKS.copy()# {0: 0, 1: 0, 2: 0}
 
-    if env.now > 1 and len(MIX[env.now-1]) > 0:
+    """if env.now > 1 and len(MIX[env.now-1]) > 0:
         for _ in MIX[env.now - 1]:
             plant = MIX[env.now - 1][_]
             risk_dict[plant['source']] += plant['MWh']
@@ -1091,7 +1139,7 @@ def capital_adequacy_rationing_FF(receivables_dict, wallet):
         max_percentage = max(list(risk_dict.values()))
         for source in list(risk_dict.keys()):
             risk_dict[source] = max_percentage - risk_dict[source]
-            RISKS[source] = risk_dict[source]
+            RISKS[source] = risk_dict[source]"""
 
     recv_w_risk = {source: receivables_dict[source] * (1 + risk_dict[source]) for source in receivables_dict}
     denominator = sum(recv_w_risk[source] for source in recv_w_risk)

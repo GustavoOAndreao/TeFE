@@ -194,6 +194,7 @@ def scatter_graph(full_x, full_y, speed=False, groupby=None, show=True, time=1, 
     y =list(DF_y.groupby(groupby, as_index=False)[y_var].mean()[y_var])
     # print(x,y)
 
+    regression = True
     if speed is True:
         """priv_goal[period] - priv_goal[period - 1]
                                  ) / priv_goal[period - 1] if priv_goal[period - 1] > 0 else 1"""
@@ -211,6 +212,7 @@ def scatter_graph(full_x, full_y, speed=False, groupby=None, show=True, time=1, 
         to_pop.reverse()
         if len(to_pop) == len(x):
             x = y = [0]  # for i in range(len(x))]
+            regression = False
 
         else:
             for i in to_pop:
@@ -249,11 +251,11 @@ def scatter_graph(full_x, full_y, speed=False, groupby=None, show=True, time=1, 
                    mode='lines',
                    line=dict(color='rgba(0,0,0,1)'))
     )
+    if regression is True:
+        reg = LinearRegression().fit(np.vstack(x), y)
+        best_fit = reg.predict(np.vstack(x))
 
-    reg = LinearRegression().fit(np.vstack(x), y)
-    best_fit = reg.predict(np.vstack(x))
-
-    fig.add_trace(go.Scatter(name='line of best fit', x=x, y=best_fit, mode='lines'))
+        fig.add_trace(go.Scatter(name='line of best fit', x=x, y=best_fit, mode='lines'))
 
     if normalization is False and (_normal_x is True or _normal_y is True):
         # print('blam')
@@ -550,9 +552,10 @@ if __name__ == '__main__':
     """
     Agents graphs first
     """
-
-
-    pre_titles = ["05_YES_YES__agents", "0_YES_YES__agents", "1_NO_NO__agents", "1_NO_YES__agents", "1_YES_NO__agents"]
+    pre_titles = []
+    for i in list(dfs.keys()):
+        if 'agents' in i:
+            pre_titles.append(i)
 
     # pre_titles = ['YES_YES__agents']  # uncomment and put a certain dataframe name to avoid checking all
 
@@ -751,7 +754,12 @@ if __name__ == '__main__':
     mix graphs now
     """
 
-    pre_titles = ["05_YES_YES__mix", "0_YES_YES__mix", "1_NO_NO__mix", "1_NO_YES__mix", "1_YES_NO__mix"]
+    pre_titles = []
+    for i in list(dfs.keys()):
+        if 'mix' in i:
+            pre_titles.append(i)
+
+    # pre_titles = []  # uncomment to select just certain dataframes
     for pre_title in pre_titles:
 
         mix_df = dfs[pre_title]
@@ -833,6 +841,81 @@ if __name__ == '__main__':
         fig.write_html(pathfile + file_name)
 
         # fig.show()
+
+        ### figure of capacity
+
+        fig = go.Figure()
+
+        thermal_iqr, thermal_max_min, thermal_median = simple_add_trace('Thermal capacity', 'capacity',
+                                                                        mix_df.loc[
+                                                                            (
+                                                                                    mix_df['source'] == 0)],
+                                                                        'period', groupby=None, remove_outliers=True,
+                                                                        color='232,126,4', _sum=True)
+
+        """fig.add_trace(go.Scatter(name=thermal_iqr['name'],
+                                 x=thermal_iqr['x'],
+                                 y=thermal_iqr['y'],
+                                 fill=thermal_iqr['fill'],
+                                 fillcolor=thermal_iqr['fillcolor'],
+                                 line=thermal_iqr['line']))"""
+
+        fig.add_trace(go.Scatter(name=thermal_median['name'],
+                                 x=thermal_median['x'],
+                                 y=thermal_median['y'],
+                                 mode=thermal_median['mode'],
+                                 line=thermal_median['line']))
+
+        solar_iqr, solar_max_min, solar_median = simple_add_trace('Solar capacity', 'capacity',
+                                                                  mix_df.loc[(
+                                                                          mix_df['source'] == 2)],
+                                                                  'period', groupby=None, remove_outliers=True,
+                                                                  color='126,232,4',
+                                                                  _sum=True)
+
+        """fig.add_trace(go.Scatter(name=solar_iqr['name'],
+                                 x=solar_iqr['x'],
+                                 y=solar_iqr['y'],
+                                 fill=solar_iqr['fill'],
+                                 fillcolor=solar_iqr['fillcolor'],
+                                 line=solar_iqr['line']))"""
+
+        fig.add_trace(go.Scatter(name=solar_median['name'],
+                                 x=solar_median['x'],
+                                 y=solar_median['y'],
+                                 mode=solar_median['mode'],
+                                 line=solar_median['line']))
+
+        wind_iqr, wind_max_min, wind_median = simple_add_trace('Wind capacity', 'capacity',
+                                                               mix_df.loc[(
+                                                                       mix_df['source'] == 1)],
+                                                               'period', groupby=None, remove_outliers=True,
+                                                               color='4,126,232', _sum=True)
+
+        """fig.add_trace(go.Scatter(name=wind_iqr['name'],
+                                 x=wind_iqr['x'],
+                                 y=wind_iqr['y'],
+                                 fill=wind_iqr['fill'],
+                                 fillcolor=wind_iqr['fillcolor'],
+                                 line=wind_iqr['line']))"""
+
+        fig.add_trace(go.Scatter(name=wind_median['name'],
+                                 x=wind_median['x'],
+                                 y=wind_median['y'],
+                                 mode=wind_median['mode'],
+                                 line=wind_median['line']))
+
+        fig.update_layout(
+            title='Electric capacity ' + pre_title,
+            xaxis_title='period',
+            yaxis_title='MWh',
+            barmode='overlay',
+            template="simple_white")
+
+        file_name = 'Electric capacity' + '_' + pre_title + ".html"
+        pathfile = 'Figures/'
+
+        fig.write_html(pathfile + file_name)
 
         graphs_list = [
             {

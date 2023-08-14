@@ -236,7 +236,7 @@ def run_TP(name,
         #                                                               #
         #################################################################
 
-        if env.now % 12 == 0 and env.now > 0:
+        if env.now % 12 == 0 and env.now > 0 and wallet > 0:
             profits_to_shareholders = wallet*(1-value)
             wallet -= profits_to_shareholders
             shareholder_money += profits_to_shareholders
@@ -245,7 +245,7 @@ def run_TP(name,
         #                                                               #
         #         The TP then has to 1) adjust the base capex to        #
         #         the productive capacity (if the technology is         #
-        #  non-transportable; 2) change the strategy if the verdict was  #
+        #  non-transportable; 2) change the strategy if the verdict was #
         #  to change it; 3) spend the available money into imitation,   #
         # innovation or productive capacity; 4) check if the TP reached #
         #     the threshold of innovation/imitation and change the      #
@@ -270,7 +270,13 @@ def run_TP(name,
             """ we have to produce the actual CAPEX, with is the base_CAPEX multiplied by euler's number to the
              power of the ratio of how many times the base capex is greater than the capacity itself multiplied
               by the threshold of capacity"""
-            new_capex = max(min(base_capex, capacity_threshold * base_capex * 10**9 / capacity), base_capex/2)
+            new_capex = max(min(
+                base_capex, base_capex ** capacity_threshold / capacity
+            ), base_capex/(2 ** (env.now // 120)))
+
+            """if base_capex != new_capex != Technology['CAPEX']:
+                print(name, env.now, new_capex, base_capex, base_capex ** capacity_threshold, capacity)"""
+
             Technology.update({
                 'CAPEX': new_capex
             })
@@ -295,7 +301,7 @@ def run_TP(name,
 
         """4) we have to check if the TP reached the threshold for innovation or imitation"""
         a = 0
-        if RandD > RnD_threshold: # and (strategy == 'innovation' or strategy == 'imitation'):
+        if RandD > RnD_threshold:  # and (strategy == 'innovation' or strategy == 'imitation'):
             """ then we get the 'a' which can either be a poisson + normal for innovation, or a simple binomial.
              Values above or equal (for the imitation) 1 indicate that innovation or imitation occured """
             tech_age = starting_tech_age + innovation_index
@@ -915,7 +921,8 @@ def run_EPM(genre,
                                 'auction_contracted': True,
                                 'price_expiration': env.now + PPA_expiration + PPA_limit + 1,
                                 'limit': env.now + PPA_limit + 1,
-                                'sender': 'EPM'
+                                'sender': 'EPM',
+                                'auction_price': project.copy()['price']
                             }
 
                             project.update(project_update)
@@ -1418,7 +1425,7 @@ def run_BB(NPV_THRESHOLD_DBB,
         #                                                               #
         #################################################################
 
-        if env.now % 12 == 0 and env.now > 0:
+        if env.now % 12 == 0 and env.now > 0 and wallet > 0:
             profits_to_shareholders = wallet * (1 - value)
             wallet -= profits_to_shareholders
             shareholder_money += profits_to_shareholders
@@ -1675,34 +1682,39 @@ def run_EP(env,
             """ Moreover, if the plant was activated, then the EP pays the OPEX of it """
             for _ in MIX[env.now - 1]:
                 """ Then we check each plant in the mix """
-                i = MIX[env.now - 1][_].copy()
                 """ the _ is the code of the plant, whereas i is the dictionary of the plant itself """
-                if i['EP'] == name and i['status'] == 'contracted':
-                    """ if the plant is mine and it is contracted, I'll collect profits """
-                    addition = i['MWh'] * i['price'] - i['OPEX']
+                i = MIX[env.now - 1][_].copy()
+                if i['EP'] == name:
+
+                    addition = -1*i['OPEX']  # all plants have operating costs
+
+                    if i['status'] == 'contracted':
+                        """ if the plant is mine and it is contracted, I'll collect profits """
+                        addition += i['MWh'] * i['price']
+
+                        """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the 
+                        policy makers, other EPs and the demand to do some calculations """
+                        code = uuid.uuid4().int
+                        """ this is to get a unique and random number """
+                        j = i.copy()
+                        """ and we also have to create a copy of the i dictionary, if not things will update on that 
+                        dictionary, and that's no good """
+                        j.update({
+                            'status': 'payment',
+                            'sender': 'DD',
+                            'source': j['source'],
+                            'receiver': name,
+                            'value': j['MWh'] * j['price']
+                        })
+                        """ and now we update"""
+                        CONTRACTS[env.now - 1][code] = j
+
                     wallet += addition
                     profits += addition
                     """if math.isnan(i['MWh'] * i['price'] - i['OPEX']) is True:
                         print(name, math.isnan(i['MWh']), math.isnan(i['price']), math.isnan(i['OPEX']))
                         print(i)"""
                     dd_profits[i['source']] += addition
-
-                    """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the 
-                    policy makers, other EPs and the demand to do some calculations """
-                    code = uuid.uuid4().int
-                    """ this is to get a unique and random number """
-                    j = i.copy()
-                    """ and we also have to create a copy of the i dictionary, if not things will update on that 
-                    dictionary, and that's no good """
-                    j.update({
-                        'status': 'payment',
-                        'sender': 'D',
-                        'source': j['source'],
-                        'receiver': name,
-                        'value': j['MWh'] * j['price']
-                    })
-                    """ and now we update"""
-                    CONTRACTS[env.now - 1][code] = j
 
         #################################################################
         #                                                               #
@@ -1711,7 +1723,7 @@ def run_EP(env,
         #                                                               #
         #################################################################
 
-        if env.now % 12 == 0 and env.now > 0:
+        if env.now % 12 == 0 and env.now > 0 and wallet > 0:
             profits_to_shareholders = wallet * (1 - value)
             wallet -= profits_to_shareholders
             shareholder_money += profits_to_shareholders
@@ -1728,7 +1740,7 @@ def run_EP(env,
         if len(portfolio_of_plants) > 0:
             for _ in portfolio_of_plants:
                 i = portfolio_of_plants[_]
-                number = ((i['principal'] / (1 + AMMORT)) + i['principal'] * r)
+                number = i['principal'] / (1 + AMMORT)
 
                 """  1) we pay for the ammortization of plants """
 
@@ -1772,6 +1784,10 @@ def run_EP(env,
 
                 if i['status'] == 'built':
                     j = i.copy()
+                    _price = (j['OPEX'] + (j['CAPEX'] / j['lifetime'])) * (1 + config.MARGIN - value) / j['MWh']
+                    j['price'] = _price if 'auction_price' not in j else j['auction_price']
+                    if 'auction_contracted' not in j:
+                        j['auction_contracted'] = False
                     MIX[env.now][_] = j
 
         #############################################################
@@ -1834,7 +1850,7 @@ def run_EP(env,
                 elif (
                         i['status'] in ['project', 'rejected'] and
                         (
-                                (i['CAPEX'] < wallet and i['status'] == 'rejected') or
+                                (i['status'] == 'rejected') or
                                 ('guarantee' in i or 'auction_contracted' in i)
                         ) and name in [i['receiver'], i['sender']]
                 ):
@@ -1936,6 +1952,7 @@ def run_EP(env,
                 })
                 if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
                     # print('sending to EPM for auction')
+
                     project.update(
                         {'status': 'bidded',
                          'price': round((
@@ -1970,11 +1987,7 @@ def run_EP(env,
             if 'limit' not in i:
                 i['limit'] = env.now + 1 + _tolerance
 
-            if i['limit'] == env.now:
-                # print('project ', _, ' has reached its limit time...')
-                _to_pop.append(_)
-
-            elif i['CAPEX'] > wallet:
+            if i['CAPEX'] > wallet:
                 receiver = bank_sending_FF()
                 project = i.copy()
                 project.update({'sender': name,
@@ -1983,7 +1996,7 @@ def run_EP(env,
                 CONTRACTS[env.now].update({
                     _: project
                 })
-            elif i['CAPEX'] < wallet and reinvest is True:
+            elif i['CAPEX'] <= wallet and reinvest is True:
                 # print(name, 'has just reinvested, and this is the status', i['status'])
                 wallet -= i['CAPEX']
                 code = _  # uuid.uuid4().int
@@ -2015,6 +2028,10 @@ def run_EP(env,
                          }
                 })"""
 
+            if i['limit'] == env.now and _ not in _to_pop:
+                # print('project ', _, ' has reached its limit time...')
+                _to_pop.append(_)
+
         if len(_to_pop) > 0:
             for code in _to_pop:
                 portfolio_of_projects.pop(code)
@@ -2025,10 +2042,10 @@ def run_EP(env,
         #                       its intervention                        #
         #                                                               #
         #################################################################
-        if env.now > 0:
+        if env.now > 0 and env.now % periodicity == 0:
             add_source = source_reporting_FF(name, _past_weight, index)
             for entry in range(len(source) - 1):
-                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount) ** periodicity
 
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
@@ -2141,7 +2158,7 @@ def run_DD(env,
             printable = 'seed is ' + str(config.seed)
             # print(printable)
 
-        elif env.now % when == 0:
+        elif env.now % when == 0 and env.now > 0:
             # print(env.now)
             """ first, we get how much green is E or M"""
             """greeness = {'E': 0, 'M': 0}
@@ -2176,29 +2193,40 @@ def run_DD(env,
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
         demand = DEMAND.copy()[env.now] * 24 * 30
         if env.now > 0 and len(MIX[env.now]) > 0:
+
             """ 
             First, we contract and precify the electricity projects
             """
 
-            possible_projects = []
+            possible_projects = [] # list(MIX[env.now].values())
             for _ in MIX[env.now]:
                 """ we build the list of possible projects, i.e., projects deployed or already built"""
-                j = MIX[env.now][_].copy()
-                if j['status'] == 'built' or j['status'] == 'contracted':
+                i = MIX[env.now][_]
+                if i['status'] == 'built' or i['status'] == 'contracted':
+                    """price = (
+                                    i['OPEX'] + (i['CAPEX'] / i['lifetime'])
+                            ) * (1 + config.MARGIN) / i['MWh']
+                    if 'price' not in i:
+                        i['price'] = price
+                    if 'auction_contracted' in i and i['auction_contracted'] is True:
+                        i['auction'] = 0
+                    else:   
+                        i['auction'] = 1"""
+                    j = MIX[env.now][_].copy()
                     possible_projects.append(j)
             """ now, we sort the list of dictionaries in terms of dispatchability and then OPEX (respecting the merit order)"""
-            possible_projects = sorted(possible_projects, key=lambda x: (x['dispatchable'], x['OPEX']))
+            possible_projects = sorted(possible_projects, key=lambda x: (~x['auction_contracted'],
+                                                                         x['price']))
+
+            # possible_projects = sorted(possible_projects, reverse=True, key=lambda x: x['auction_contracted'])
+            # print(possible_projects)
             chosen = []
             # print('full demand is ', demand)
             for plant in possible_projects:
-                if plant['source'] == 0 and demand < 0:
-                    """ if there is no more demand to be supplied, then the plant is not contracted"""
-                    MIX[env.now][plant['code']].update({
-                        'status': 'built'
-                    })
-                    # print(MIX[env.now][plant['code']], 'was not contracted')
-                else:
+                if ('auction_contracted' in plant and plant['auction_contracted'] is True) or demand >= 0:
                     """ if there is still demand to to be supplied, then, the power plant is contracted"""
+                    """ if the plant is dispatchable it will always enter """
+                    """ if the plant is auction contracted it will also always enter"""
                     MIX[env.now][plant['code']].update({
                         'status': 'contracted'
                     })
@@ -2206,8 +2234,14 @@ def run_DD(env,
                     demand -= plant['MWh']
                     Demand_by_source[plant['source']] += plant['MWh']
                     # print('demand decrease by', plant['MWh'])
+                else:
+                    """ if there is no more demand to be supplied, then the plant is not contracted"""
+                    MIX[env.now][plant['code']].update({
+                        'status': 'built'
+                    })
+                    # print(MIX[env.now][plant['code']], 'was not contracted')
             """ following the merit order, the system is precified in relation to its most costly unit"""
-            chosen_plant = sorted(chosen, key=lambda x: x['OPEX'])[-1]
+            chosen_plant = sorted(chosen, key=lambda x: x['price'])[-1]
             price = (
                             chosen_plant['OPEX'] + (chosen_plant['CAPEX'] / chosen_plant['lifetime'])
                      ) * (1 + MARGIN) / chosen_plant['MWh']
@@ -2216,9 +2250,43 @@ def run_DD(env,
                 if 'auction_contracted' not in i or i['auction_contracted'] is False:
                     MIX[env.now][i['code']].update({
                         'price': round(price, 3)})
+                elif 'auction_contracted' in i and i['auction_contracted'] is True:
+                    MIX[env.now][i['code']].update({
+                        'price': max(round(price, 3), i['auction_price'])})
 
             _Price = weighting_FF(env.now, 'price', 'MWh', MIX) if len(MIX[env.now]) > 0 else config.STARTING_PRICE
             # ic(env.now, increase, demand, DEMAND[env.now], _Price)
+
+            risk_dict = {0: 0, 1: 0, 2: 0}
+            risk = 'source'
+            if risk == 'demand':
+                total_MWh = sum(Demand_by_source.values())
+                for source in list(risk_dict.keys()):
+                    risk_dict[source] = Demand_by_source[source] / total_MWh
+                max_percentage = max(list(risk_dict.values()))
+                for source in list(risk_dict.keys()):
+                    risk_dict[source] = max_percentage - risk_dict[source]
+                    config.RISKS[source] = risk_dict[source]
+            else:
+
+                for source in risk_dict:
+                    risky = finding_FF(
+                        MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'] / max(
+                        finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25)
+                    # print(source, risk_dict[source])
+                    risk_dict[source] = 1 - risky
+                    config.RISKS[source] = risk_dict[source]
+                    # print(source, config.RISKS[source])
+
+            if env.now == config.FUSS_PERIOD:
+                if demand > 0:
+                    print('We failed to provide for the whole system on time')
+                elif env.now == config.FUSS_PERIOD and demand < 0:
+                    print('We reached the whole system with excess of  ' + str(demand))
+                print('demand was', DEMAND[env.now])
+                DEMAND[env.now] += -1 * demand/(24*30)
+                print('now demand is', DEMAND[env.now])
+
 
         AGENTS[env.now][name] = {
             'name': name,
@@ -2406,8 +2474,7 @@ def make_ep(env,
             discount=None,
             past_weight=None,
             current_weight=None,
-            periodicity=None,
-            green_ep = 0.25
+            periodicity=None
             ):
 
     """
@@ -2431,7 +2498,7 @@ def make_ep(env,
         name = 'EP_' + str(uuid.uuid4().hex)
 
     if wallet is None:
-        wallet = random.uniform(0, 2) * 10 ** 8
+        wallet = random.uniform(6, 9) * 10 ** 7
     if decision_var is None:
         decision_var = random.uniform(0, 1)
     if current_weight is None:
@@ -2448,12 +2515,8 @@ def make_ep(env,
         LSS_thresh = [0.25, 0.5, .75]
         random.shuffle(LSS_thresh)
     if source is None:
-        source = [{1: random.uniform(0, 500)}, {2: random.uniform(0, 500)}]
-        random.shuffle(source)
-        if random.uniform(0,1) < green_ep:
-            source.append({0: random.uniform(0, 1000)})
-        else:
-            source = [{0: random.uniform(0, 1000)}] + source
+        source = [{0: random.uniform(0, 1000)}, {1: random.uniform(0, 500)}, {2: random.uniform(0, 500)}]
+        source.sort(key=lambda x: list(x.values())[0], reverse=True)
 
     if tolerance is None:
         tolerance = [int(random.uniform(6, 12))]
@@ -2484,19 +2547,19 @@ def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_thresho
     if name is None:
         name = 'TP_' + str(uuid.uuid4().hex)
     if source is None:
-        source = random.choice([1,2])
+        source = random.choice([1, 2])
 
     if wallet is None:
         wallet = random.uniform(1, 3)*10**6 if source == 1 else random.uniform(1, 2)*10**6
 
     if capacity is None:
-        capacity = random.uniform(10, 20)*10**3 if source == 1 else random.uniform(1, 2)*10**6
+        capacity = random.uniform(1, 2)*10**6 if source == 1 else random.uniform(0, 1)*10**6
 
     if RnD_threshold is None:
         RnD_threshold = random.uniform(2, 5)
 
     if capacity_threshold is None:
-        capacity_threshold = random.uniform(2, 5)
+        capacity_threshold = random.uniform(2, 4)
 
     if decision_var is None:
         decision_var = random.uniform(0, 1)
@@ -2528,8 +2591,8 @@ def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_thresho
     return TP(
         env=env,
         name=name,
-        wallet=random.uniform(1, 3)*10**6,
-        capacity=random.uniform(10, 20)*10**3,
+        wallet=wallet,
+        capacity=capacity,
         Technology={'name': name,
                     "green": True,
                     "source": source,

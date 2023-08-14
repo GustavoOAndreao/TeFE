@@ -169,7 +169,7 @@ def concat_csvs(json_files, file_type, name, _path, _format, big_files=None):
     to_search = to_search if big_files is None else random.sample(to_search, big_files)
     start = timeit.default_timer()
     for entry in range(0, len(to_search)):
-        print(str(entry) + ' of ' + str(len(to_search) - 1) + ' is starting at ' + time.strftime("%H:%M:%S", time.localtime()))
+        print(str(entry+1) + ' of ' + str(len(to_search)) + ' is starting at ' + time.strftime("%H:%M:%S", time.localtime()))
         global path_to_json
         json_file = open(to_search[entry])
         """d = json.load(json_file)
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     list_of_dirs = next(os.walk('.'))[1]
     list_of_dirs.remove('Figures')
 
-    # list_of_dirs = ['1_NO_YES']  # uncomment and put the directory name to override checking all directories
+    # list_of_dirs = ['1_NO_NO'] # ['0_YES_YES']  # uncomment and put the directory name to override checking all directories
 
     for path in list_of_dirs:  # ['ALL_NO_NO', 'ALL_NO_YES', 'ALL_YES_NO', 'ALL_YES_YES']:
         path_to_json = 'analysis/..'
@@ -273,7 +273,7 @@ if __name__ == '__main__':
                 print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES' + " (sampling)")
                 concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict, path, _format)  # , big_files=True)
 
-    duration = 3000  # milliseconds
+    duration = 1500  # milliseconds
     freq = 660  # Hz
     winsound.Beep(freq, duration)
 

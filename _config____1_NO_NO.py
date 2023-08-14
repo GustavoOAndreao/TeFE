@@ -303,7 +303,7 @@ THERMAL = {
     "CAPEX": 1000000,
     'OPEX': 30000,
     "MW": 30,
-    'CF': .7,
+    'CF': .5,
     "lifetime": 30 * 12,
     'building_time': 24,
     'emissions': 100
@@ -337,7 +337,7 @@ for j in range(SIM_TIME):
                                            "source_name": 'thermal',
                                            "CAPEX": THERMAL.get("CAPEX"),
                                            'OPEX': THERMAL.get('OPEX'),
-                                           "dispatchable": True,
+                                           "dispatchable": False,
                                            "transport": False,
                                            "CF": THERMAL.get("CF"),
                                            "MW": THERMAL.get("MW"),

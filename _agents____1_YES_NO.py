@@ -33,7 +33,7 @@ PRIVATE_BANK = []
 config.BB_NUMBER = len(PRIVATE_BANK)
 
 DEMAND = [Demand(env=env,
-                 initial_demand=random.normalvariate(INITIAL_DEMAND, INITIAL_DEMAND*0.25),
+                 initial_demand=INITIAL_DEMAND,
                  when=1,
                  increase=INITIAL_DEMAND * random.uniform(0.001, 0.005))]
 

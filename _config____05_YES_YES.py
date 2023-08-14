@@ -336,7 +336,7 @@ for j in range(SIM_TIME):
                                            "source_name": 'thermal',
                                            "CAPEX": THERMAL.get("CAPEX"),
                                            'OPEX': THERMAL.get('OPEX'),
-                                           "dispatchable": True,
+                                           "dispatchable": False,
                                            "transport": False,
                                            "CF": THERMAL.get("CF"),
                                            "MW": THERMAL.get("MW"),
