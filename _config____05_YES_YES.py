@@ -25,6 +25,7 @@ descrpt = "Full homogeneity between policymakers"
 
 blem = [10]  # example value
 
+
 """
 Variables that we want to save:
 """
@@ -91,7 +92,8 @@ ENTRIES_TO_SAVE = {
         "true_innovation_index",
         "LSS_tot",
         "prod_cap_pct",
-        "LSS_weak"
+        "LSS_weak",
+        'PCT'
     ],
     'BB': [
         "financing_index",
@@ -143,8 +145,8 @@ ENTRIES_TO_SAVE = {
         # "auction_capacity",
         # "instrument",
         "source",
-        # "LSS_thresh",
-        # "impatience",
+        "LSS_thresh",
+        "impatience",
         # "disclosed_thresh",
         # "past_weight",
         # "memory",
@@ -189,8 +191,8 @@ ENTRIES_TO_SAVE = {
         # "decision_var",
         "disclosed_var",
         # "verdict",
-        # "LSS_thresh",
-        # "impatience",
+        "LSS_thresh",
+        "impatience",
         # "disclosed_thresh",
         # "past_weight",
         # "memory",
@@ -248,10 +250,10 @@ ENTRIES_TO_SAVE = {
     ],
     'DICTS': [
         'MIX',
-        'AGENTS'
+        'AGENTS',
+        'TECHNOLOGIC'
     ]
 }
-
 
 """
 Global constants and variables
@@ -272,7 +274,7 @@ DEMAND = {}
 MIX = {}
 TECHNOLOGIC = {}
 TECHNOLOGIC_r = {}
-r = 0.001
+r = 0.011
 POLICY_EXPIRATION_DATE = 12 * 10
 rNd_INCREASE = 0.5
 # M_CONTRACT_LIMIT = 2 * 12
@@ -283,8 +285,7 @@ NPV_THRESHOLD_DBB = 0
 INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 120: [0, 1, 2]}
 BASEL = 0.105
 MARGIN = 4.5
-INITIAL_DEMAND = 3.5 * 10 ** 4
-STARTING_PRICE = 11
+INITIAL_DEMAND = 2.1 * 10 ** 4
 RADICAL_THRESHOLD = 2
 RISKS = {0: 0, 1: 0, 2: 0}
 SIM_TIME = 12 * 20
@@ -298,30 +299,31 @@ TP_THERMAL_PROD_CAP_PCT = 0.5
 Technology
 """
 
+
 THERMAL = {
-    "CAPEX": 1000000,
-    'OPEX': 30000,
+    "CAPEX": 29040000,
+    'OPEX': 100000,
     "MW": 30,
-    'CF': .7,
+    'CF': .5,
     "lifetime": 30 * 12,
     'building_time': 24,
     'emissions': 100
 }
 
 WIND = {
-    "CAPEX": 250000,
-    'OPEX': 3000,
-    "MW": 10,
+    "CAPEX": 3750000,
+    'OPEX': 4250,
+    "MW": 1.5,
     'CF': .29,
     "lifetime": 25 * 12,
     'building_time': 12
 }
 
 SOLAR = {
-    "CAPEX": 10000,
-    'OPEX': 150,
-    "MW": 1,
-    'CF': .1,
+    "CAPEX": 1025000,
+    'OPEX': 583,
+    "MW": .5,
+    'CF': .176,
     "lifetime": 25 * 12,
     'building_time': 6
 }
@@ -384,3 +386,7 @@ for j in range(SIM_TIME):
                                           'avoided_emissions': 250}
                             }
                             }) """
+
+
+STARTING_PRICE = (THERMAL['OPEX'] + (THERMAL['CAPEX'] / THERMAL['lifetime'])
+                                  ) * (1 + MARGIN) / (THERMAL['MW'] * 24 * 30 * THERMAL['CF'])

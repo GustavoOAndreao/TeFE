@@ -412,7 +412,8 @@ def run_TP(name,
                   "true_innovation_index": true_innovation_index,
                   "LSS_tot": LSS_tot,
                   "prod_cap_pct": prod_cap_pct,
-                  "strikables_dict": strikables_dict
+                  "strikables_dict": strikables_dict,
+                  'PCT': prod_cap_pct[0]/prod_cap_pct[1]
                   }
 
         if env.now > 1:
@@ -459,9 +460,8 @@ class TPM(object):
                            'discount': discount,
                            "source": source,
                            "disclosed_thresh": disclosed_thresh,
-                           "past_weight": past_weight} # ,
-                           # 'instrument': instrument
-                           # }
+                           "past_weight": past_weight,
+                           'instrument': instrument}
 
         self.strikables_dict = strikable_dicting(strikables_dict)
 
@@ -544,7 +544,7 @@ def run_TPM(genre,
             policy_pool.append(policies)  # with this we a temporary list with first the current policy and afterwards
             # all the other policies
 
-        if env.now >= 2:
+        if env.now >= 1:
             for entry in policy_pool:
 
                 instrument = entry['instrument']
@@ -582,7 +582,7 @@ def run_TPM(genre,
 
             # value = disclosed_var
 
-        if env.now > 2:
+        if env.now > 1:
             add_source = source_reporting_FF(name, _past_weight)
             for entry in range(len(source) - 1):
                 source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
@@ -625,7 +625,8 @@ def run_TPM(genre,
             "policies": policies,
             "rationale": rationale,
             "current_state": current_stating_FF(_rationale),
-            "LSS_tot": LSS_tot
+            "LSS_tot": LSS_tot,
+            "strikables_dict": strikables_dict
         }
 
         if env.now > 1:
@@ -871,8 +872,8 @@ def run_EPM(genre,
                         # ic(possible_projects)
                         """ the capacity for auction is the value (in GW) multplied by 1000 (to become MW)"""
 
-                        max_auction = 2000
-                        min_auction = 800
+                        max_auction = 5000
+                        min_auction = 1000
 
                         auction_size = max_auction - min_auction
                         auction_size *= entry_value
@@ -900,14 +901,17 @@ def run_EPM(genre,
                          
                         """
 
+                        uncontracted_projects = []
                         for project in possible_projects:
                             if remaining_capacity > 0:
                                 """ if there is still capacity to contract, then the project is contracted"""
                                 contracted_projects.append(project)
+                            else:
+                                uncontracted_projects.append(project)
                             remaining_capacity -= project['capacity']
                         """ then we cycle through the codes of the contracted projects in order to tell the proponent 
                         agents that their projects were contracted"""
-                        for project in contracted_projects:
+                        for project in contracted_projects + uncontracted_projects:
                             """ first we update it to include attributes exclusive to PPAs, such as the auction price, 
                             the boolean auction_contracted and the date of expiration of the price"""
                             code = project['code']
@@ -916,14 +920,21 @@ def run_EPM(genre,
                                 print(project)
                                 print(price, project['OPEX'], project['CAPEX'], project['lifetime'], MARGIN, project['MWh'])
                                 print('check this out', math.isnan(project['OPEX']), math.isnan(project['CAPEX']), math.isnan(project['lifetime']), math.isnan(MARGIN), math.isnan(project['MWh']))"""
-                            project_update = {
-                                'status': 'project',
-                                'auction_contracted': True,
-                                'price_expiration': env.now + PPA_expiration + PPA_limit + 1,
-                                'limit': env.now + PPA_limit + 1,
-                                'sender': 'EPM',
-                                'auction_price': project.copy()['price']
-                            }
+                            if project in contracted_projects:
+                                project_update = {
+                                    'status': 'project',
+                                    'auction_contracted': True,
+                                    'price_expiration': env.now + PPA_expiration + PPA_limit + 1,
+                                    'limit': env.now + PPA_limit + 1,
+                                    'sender': 'EPM',
+                                    'auction_price': project.copy()['price']
+                                }
+                            else:
+                                project_update = {
+                                    'status': 'rejected',
+                                    'auction_contracted': False,
+                                    'sender': 'EPM'
+                                }
 
                             project.update(project_update)
 
@@ -1740,15 +1751,16 @@ def run_EP(env,
         if len(portfolio_of_plants) > 0:
             for _ in portfolio_of_plants:
                 i = portfolio_of_plants[_]
-                number = i['principal'] / (1 + AMMORT)
+                Fee = (i['principal'] / (1 + AMMORT)) + i['debt'] * i['r'] if 'debt' in i else 0
 
                 """  1) we pay for the ammortization of plants """
 
                 if i['ammortisation'] > env.now and (
-                        i['guarantee'] is not True or (i['guarantee'] is True and wallet >= number)
+                        i['guarantee'] is not True or (i['guarantee'] is True and wallet >= Fee)
                 ) and i['BB'] != 'reinvestment':
                     """ if the plant is not guaranteed or if it's guaranteed but the EP has enough money to cover it """
-                    wallet -= number
+                    wallet -= Fee
+                    i['debt'] -= Fee
 
                     code = uuid.uuid4().int
                     CONTRACTS[env.now].update({
@@ -1757,10 +1769,10 @@ def run_EP(env,
                             'receiver': i['BB'],
                             'status': 'payment',
                             'source': i['source'],
-                            'value': number
+                            'value': Fee
                         }
                     })
-                elif i['ammortisation'] > env.now and i['guarantee'] is True and wallet < number:
+                elif i['ammortisation'] > env.now and i['guarantee'] is True and wallet < Fee:
                     """ if not, then the development bank pays for that monthly fee"""
                     j = i.copy()
                     j.update({
@@ -1785,7 +1797,7 @@ def run_EP(env,
                 if i['status'] == 'built':
                     j = i.copy()
                     _price = (j['OPEX'] + (j['CAPEX'] / j['lifetime'])) * (1 + config.MARGIN - value) / j['MWh']
-                    j['price'] = _price if 'auction_price' not in j else j['auction_price']
+                    j['price'] = 0 if 'auction_price' in j and i['auction_contracted'] is True else _price
                     if 'auction_contracted' not in j:
                         j['auction_contracted'] = False
                     MIX[env.now][_] = j
@@ -1851,7 +1863,7 @@ def run_EP(env,
                         i['status'] in ['project', 'rejected'] and
                         (
                                 (i['status'] == 'rejected') or
-                                ('guarantee' in i or 'auction_contracted' in i)
+                                (i['guarantee'] == True or i['auction_contracted'] == True)
                         ) and name in [i['receiver'], i['sender']]
                 ):
                     # if the project was not financed but it got a guarantee or whas a PPA, we have to prepare it to be
@@ -1873,7 +1885,9 @@ def run_EP(env,
         #############################################################
         if env.now > 0 and env.now % periodicity == 0:
             mix_expansion = ((
-                                     DEMAND.copy()[env.now-1] * value + (AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (24 * 30))
+                                     DEMAND.copy()[env.now-1] * value + max(
+                                 AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'],
+                             0) / (24 * 30)
                              ) / EP_NUMBER)
             # ic(mix_expansion, value) if env.now> config.FUSS_PERIOD else None
             # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
@@ -1903,7 +1917,7 @@ def run_EP(env,
 
             # print(EP_NUMBER)
             _TP = {'TP': 0,
-                  'NPV': False,
+                  'NPV': 0,
                   'Lumps': 0,
                   'CAPEX': 0,
                   'OPEX': 0
@@ -1911,14 +1925,42 @@ def run_EP(env,
             for _ in TECHNOLOGIC[env.now - 1]:
                 i = TECHNOLOGIC[env.now - 1][_]
                 if i['source'] == _source:
-                    source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
+                    try:
+                        source_price = max(
+                            weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
+                            weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']])
+                    except:
+                        # source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']]
+                        source_price = config.STARTING_PRICE
+
+                    # print(source_price)
                     Lumps = min(max(1, np.ceil(mix_expansion / i['MW'])), max_lump[_source])
-                    price = source_price[i['source']]
-                    NPV = npv_generating_FF(
-                        r, i['lifetime'], Lumps, Lumps * i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price,
-                        i['CF'], AMMORT
-                    )
-                    if NPV > _TP['NPV'] or _TP['NPV'] is False:
+                    price = source_price
+                    cash_flow_RISK = config.RISKS[_source] if _source not in config.AUCTION_WANTED_SOURCES else 0
+                    # print(env.now, _source, cash_flow_RISK)
+                    try:
+                        """financing_RISK = 1 - (AGENTS[env.now - 1]['BNDES']['financing_index'][_source] /
+                                              max(0.1 / 10 ** 25,
+                                                  sum(AGENTS[env.now - 1]['BNDES']['financing_index'].values())
+                                                  )
+                                              )"""
+                        # print(list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0])
+                        if _source == list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0]:
+                            financing_RISK = AGENTS[env.now - 1]['BNDES']['disclosed_var']
+                        else:
+                            financing_RISK = True  # -1 * AGENTS[env.now - 1]['BNDES']['disclosed_var']
+
+                        interest = r if financing_RISK is True else interesting_FF(financing_RISK)
+                        NPV = npv_generating_FF(
+                            interest, i['lifetime'], Lumps, i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price,
+                            i['CF'], AMMORT, financing_RISK=financing_RISK)
+                    except:
+                        # financing_RISK = 0
+                        NPV = npv_generating_FF(
+                                r, i['lifetime'], Lumps, i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price,
+                                i['CF'], AMMORT, cash_flow_RISK=cash_flow_RISK, reinvest=True)
+
+                    if NPV > 0 and (NPV > _TP['NPV'] or random.uniform(0,1)> config.INITIAL_RANDOMNESS):
                         _TP.update({
                             'TP': _,
                             'NPV': NPV,
@@ -1948,7 +1990,8 @@ def run_EP(env,
                     'MWh': _TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
                     'avoided_emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['avoided_emissions'] * _TP['Lumps'],
                     'emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['emissions'] * _TP['Lumps'],
-                    'guarantee': False
+                    'guarantee': False,
+                    'npv': _TP['NPV']
                 })
                 if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
                     # print('sending to EPM for auction')
@@ -1957,7 +2000,7 @@ def run_EP(env,
                         {'status': 'bidded',
                          'price': round((
                                           project['OPEX'] + (project['CAPEX'] / project['lifetime'])
-                                  ) * (2 + config.MARGIN - value) / project['MWh'],
+                                  ) * (1 + config.MARGIN - value) / project['MWh'],
                                         3),
                          'receiver': 'EPM'})
                 else:
@@ -1976,7 +2019,7 @@ def run_EP(env,
                     # possibility
                     portfolio_of_projects.update({code: project})
             else:
-                print(env.now, name, _TP, _source)
+                None  # print(env.now, name, _TP, _source)
         # print(portfolio_of_projects, name)
 
         _to_pop = []
@@ -1997,36 +2040,54 @@ def run_EP(env,
                     _: project
                 })
             elif i['CAPEX'] <= wallet and reinvest is True:
-                # print(name, 'has just reinvested, and this is the status', i['status'])
-                wallet -= i['CAPEX']
-                code = _  # uuid.uuid4().int
-                # print(_)
-                _to_pop.append(_)
-                project = i.copy()
-                project.update({
-                    'EP': name,
-                    'BB': 'reinvestment',
-                    'sender': 'reinvestment',
-                    'receiver': name,
-                    'status': 'financed',
-                    'principal': 0,
-                    'completion': project['building_time'] + 1 + env.now,
-                    'retirement': project['lifetime'] + project['building_time'] + 1 + env.now,
-                    'ammortisation': env.now
-                })
-                CONTRACTS[env.now][_] = project
-                last_acquisition_period = env.now
-                # code = uuid.uuid4().int
-                """CONTRACTS[env.now].update({
-                    code:
-                        {'sender': name,
-                         'receiver': k['TP'],
-                         'status': 'payment',
-                         'source': k['source'],
-                         'value': k['CAPEX'],
-                         'MWh': k['MWh']
-                         }
-                })"""
+                cash_flow_RISK = 0 if i['auction_contracted'] is True else config.RISKS[_source]
+                try:
+                    source_price = max(
+                        weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
+                        weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']])
+                except:
+                    # source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']]
+                    source_price = config.STARTING_PRICE
+                # financing_RISK = 0
+                NPV = npv_generating_FF(
+                    r, i['lifetime'], 1, i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], source_price,
+                    i['CF'], AMMORT, cash_flow_RISK=cash_flow_RISK, reinvest=True)
+
+                max_npv = finding_FF(portfolio_of_plants, 'npv', how='highest')['value']
+                min_npv = finding_FF(portfolio_of_plants, 'npv', how='lowest')['value']
+
+                if NPV >= random.uniform(min_npv * (1 - value), max_npv * (1 - value)):
+                    # print(name, 'has just reinvested, and this is the status', i['status'])
+                    wallet -= i['CAPEX']
+                    code = _  # uuid.uuid4().int
+                    # print(_)
+                    _to_pop.append(_)
+                    project = i.copy()
+                    project.update({
+                        'EP': name,
+                        'BB': 'reinvestment',
+                        'sender': 'reinvestment',
+                        'receiver': name,
+                        'status': 'financed',
+                        'principal': 0,
+                        'completion': project['building_time'] + 1 + env.now,
+                        'retirement': project['lifetime'] + project['building_time'] + 1 + env.now,
+                        'ammortisation': env.now,
+                        'npv': NPV
+                    })
+                    CONTRACTS[env.now][_] = project
+                    last_acquisition_period = env.now
+                    # code = uuid.uuid4().int
+                    """CONTRACTS[env.now].update({
+                        code:
+                            {'sender': name,
+                             'receiver': k['TP'],
+                             'status': 'payment',
+                             'source': k['source'],
+                             'value': k['CAPEX'],
+                             'MWh': k['MWh']
+                             }
+                    })"""
 
             if i['limit'] == env.now and _ not in _to_pop:
                 # print('project ', _, ' has reached its limit time...')
@@ -2198,25 +2259,11 @@ def run_DD(env,
             First, we contract and precify the electricity projects
             """
 
-            possible_projects = [] # list(MIX[env.now].values())
-            for _ in MIX[env.now]:
-                """ we build the list of possible projects, i.e., projects deployed or already built"""
-                i = MIX[env.now][_]
-                if i['status'] == 'built' or i['status'] == 'contracted':
-                    """price = (
-                                    i['OPEX'] + (i['CAPEX'] / i['lifetime'])
-                            ) * (1 + config.MARGIN) / i['MWh']
-                    if 'price' not in i:
-                        i['price'] = price
-                    if 'auction_contracted' in i and i['auction_contracted'] is True:
-                        i['auction'] = 0
-                    else:   
-                        i['auction'] = 1"""
-                    j = MIX[env.now][_].copy()
-                    possible_projects.append(j)
-            """ now, we sort the list of dictionaries in terms of dispatchability and then OPEX (respecting the merit order)"""
+            possible_projects = list(MIX[env.now].values())
             possible_projects = sorted(possible_projects, key=lambda x: (~x['auction_contracted'],
                                                                          x['price']))
+
+            # print(possible_projects) if env.now == 100 else None
 
             # possible_projects = sorted(possible_projects, reverse=True, key=lambda x: x['auction_contracted'])
             # print(possible_projects)
@@ -2227,32 +2274,43 @@ def run_DD(env,
                     """ if there is still demand to to be supplied, then, the power plant is contracted"""
                     """ if the plant is dispatchable it will always enter """
                     """ if the plant is auction contracted it will also always enter"""
-                    MIX[env.now][plant['code']].update({
-                        'status': 'contracted'
-                    })
+                    MIX[env.now][plant['code']]['status'] = 'contracted'
                     chosen.append(plant)
-                    demand -= plant['MWh']
                     Demand_by_source[plant['source']] += plant['MWh']
                     # print('demand decrease by', plant['MWh'])
                 else:
                     """ if there is no more demand to be supplied, then the plant is not contracted"""
                     MIX[env.now][plant['code']].update({
-                        'status': 'built'
+                        'status': 'built',
+                        'price': 0
                     })
-                    # print(MIX[env.now][plant['code']], 'was not contracted')
+
+                demand -= plant['MWh']
+                # print(MIX[env.now][plant['code']], 'was not contracted')
             """ following the merit order, the system is precified in relation to its most costly unit"""
+
             chosen_plant = sorted(chosen, key=lambda x: x['price'])[-1]
+            """if chosen_plant['auction_contracted'] is False:"""
             price = (
                             chosen_plant['OPEX'] + (chosen_plant['CAPEX'] / chosen_plant['lifetime'])
-                     ) * (1 + MARGIN) / chosen_plant['MWh']
-            for i in possible_projects:
-                """ if the plant is auction contracted, then we do not mess with its price"""
-                if 'auction_contracted' not in i or i['auction_contracted'] is False:
-                    MIX[env.now][i['code']].update({
-                        'price': round(price, 3)})
-                elif 'auction_contracted' in i and i['auction_contracted'] is True:
-                    MIX[env.now][i['code']].update({
-                        'price': max(round(price, 3), i['auction_price'])})
+                    ) * (1 + MARGIN) / chosen_plant['MWh']
+            """else:
+                price = chosen_plant['price']"""
+
+            # print(price) if env.now == 100 else None
+
+            for _ in MIX[env.now]:
+                i = MIX[env.now][_]
+                if i['status'] == 'contracted':
+                    """ if the plant is auction contracted, then we do not mess with its price"""
+                    if 'auction_contracted' not in i or i['auction_contracted'] is False:
+                        MIX[env.now][i['code']].update({
+                            'price': round(price, 3)})
+                        # print(price, ' normal_price')
+                    elif 'auction_contracted' in i and i['auction_contracted'] is True:
+                        MIX[env.now][i['code']].update({
+                            'price': max(round(price, 3), i['auction_price'])})
+                        # print(i['auction_price'])
 
             _Price = weighting_FF(env.now, 'price', 'MWh', MIX) if len(MIX[env.now]) > 0 else config.STARTING_PRICE
             # ic(env.now, increase, demand, DEMAND[env.now], _Price)
@@ -2267,8 +2325,8 @@ def run_DD(env,
                 for source in list(risk_dict.keys()):
                     risk_dict[source] = max_percentage - risk_dict[source]
                     config.RISKS[source] = risk_dict[source]
-            else:
 
+            elif risk == 'source':
                 for source in risk_dict:
                     risky = finding_FF(
                         MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'] / max(
@@ -2276,17 +2334,29 @@ def run_DD(env,
                     # print(source, risk_dict[source])
                     risk_dict[source] = 1 - risky
                     config.RISKS[source] = risk_dict[source]
-                    # print(source, config.RISKS[source])
+                    # print(env.now, source, config.RISKS[source])
+            else:
+                total_MWh = sum(Demand_by_source.values())
+                for source in list(risk_dict.keys()):
+                    risk_dict[source] = Demand_by_source[source] / total_MWh
+                max_percentage = max(list(risk_dict.values()))
+                for source in list(risk_dict.keys()):
+                    risk_dict[source] = max_percentage - risk_dict[source]
+                    risky = finding_FF(
+                        MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'] / max(
+                        finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25)
+                    risk_dict[source] += 1 - risky
+                    config.RISKS[source] = risk_dict[source]/2
 
-            if env.now == config.FUSS_PERIOD:
+
+            if env.now == config.FUSS_PERIOD - 1:
                 if demand > 0:
-                    print('We failed to provide for the whole system on time')
+                    print('We failed to provide for the whole system on time by ', str(demand))
                 elif env.now == config.FUSS_PERIOD and demand < 0:
-                    print('We reached the whole system with excess of  ' + str(demand))
+                    print('We reached the whole system with excess of ', str(-1 * demand))
                 print('demand was', DEMAND[env.now])
                 DEMAND[env.now] += -1 * demand/(24*30)
                 print('now demand is', DEMAND[env.now])
-
 
         AGENTS[env.now][name] = {
             'name': name,
@@ -2335,12 +2405,12 @@ def run_HH(env,
         for _ in AGENTS[env.now]:
             agent = AGENTS[env.now][_]
 
-            if agent['genre'] in ['DBB', 'EPM']:
-                list_of_pm.append(agent)
+            if agent['genre'] in ['DBB', 'EPM', 'TPM']:
+                list_of_pm.append(agent['name'])
 
-        if len(list_of_pm) > 1 and env.now>0:
+        if len(list_of_pm) > 1 and env.now > 0:
 
-            # That means we have a EPM and a DBB
+            # That means we have more than two policy makers
 
             #################################################################
             #                                                               #
@@ -2352,93 +2422,121 @@ def run_HH(env,
             # on the agents dictionary
 
             # above the threshold, so we have to homogenize things
-            list_o_entries = ['source', 'disclosed_var', 'LSS_thresh', 'past_weight', 'memory', 'discount',
+            list_o_entries = ['source',
+                              'disclosed_var',
+                              'LSS_thresh',
+                              'past_weight',
                               'disclosed_thresh']
-            chosen_entries = []
+
+            chosen_entries = set()
+            agent = AGENTS[env.now]
             for entry in list_o_entries:
-                if entry == 'disclosed_var':
-                    if AGENTS[env.now]['BNDES'][entry] != AGENTS[env.now]['EPM'][entry]:
-                        # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
-                        chosen_entries.append(entry)
 
-                elif entry == 'source':
-                    if list(AGENTS[env.now]['BNDES'][entry][0].keys()) != list(AGENTS[env.now]['EPM'][entry][0].keys()):
-                        # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
-                        chosen_entries.append(entry)
+                for number in range(len(list_of_pm)-1):
+                    if entry == 'disclosed_var':
+                        if agent[list_of_pm[number]][entry] != agent[list_of_pm[number+1]][entry]:
+                            # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
+                            chosen_entries.add(entry)
 
-                else:
-                    if AGENTS[env.now]['BNDES'][entry][0] != AGENTS[env.now]['EPM'][entry][0]:
-                        # print(AGENTS[env.now]['BNDES'][entry][0], AGENTS[env.now]['EPM'][entry][0])
-                        chosen_entries.append(entry)
+                    elif entry == 'source':
+                        if list(agent[list_of_pm[number]][entry][0].keys()) != list(agent[list_of_pm[number+1]][entry][0].keys()):
+                            # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
+                            chosen_entries.add(entry)
 
+                    else:
+                        if agent[list_of_pm[number]][entry][0] != agent[list_of_pm[number+1]][entry][0]:
+                            # print(AGENTS[env.now]['BNDES'][entry][0], AGENTS[env.now]['EPM'][entry][0])
+                            chosen_entries.add(entry)
+
+            chosen_entries = [elem for elem in chosen_entries]
 
             if len(chosen_entries) > 0 and len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
                 # above the threshold and above the heterogeneity test, so we have to homogenize things
-                random.shuffle(chosen_entries)
+                random.shuffle(chosen_entries) # it must be random which ones go first
                 ratio = len(chosen_entries)/len(list_o_entries)
                 for entry in chosen_entries:
+                    current = {}
+                    previous = {}
                     if env.now > 0 and ratio > hetero_threshold:
                         ratio -= 1/len(list_o_entries)
-                        if entry == 'disclosed_var':
-                            current_bndes_var = AGENTS[env.now]['BNDES'][entry]
-                            previous_bndes_var = AGENTS[env.now - 1]['BNDES'][entry]
-                            current_epm_var = AGENTS[env.now]['EPM'][entry]
-                            previous_epm_var = AGENTS[env.now - 1]['EPM'][entry]
-                        elif entry == 'source':
-                            current_bndes_var = list(AGENTS[env.now]['BNDES'][entry][0].keys())
-                            previous_bndes_var = list(AGENTS[env.now - 1]['BNDES'][entry][0].keys())
-                            current_epm_var = list(AGENTS[env.now]['EPM'][entry][0].keys())
-                            previous_epm_var = list(AGENTS[env.now - 1]['EPM'][entry][0].keys())
 
-                        else:
-                            current_bndes_var = AGENTS[env.now]['BNDES'][entry][0]
-                            previous_bndes_var = AGENTS[env.now - 1]['BNDES'][entry][0]
-                            current_epm_var = AGENTS[env.now]['EPM'][entry][0]
-                            previous_epm_var = AGENTS[env.now - 1]['EPM'][entry][0]
+                        for name in list_of_pm:
+                            if entry == 'disclosed_var':
+                                current[name] = agent[name][entry]
+                                previous[name] = AGENTS[env.now - 1][name][entry]
+                            elif entry == 'source':
+                                current[name] = list(agent[name][entry][0].keys())[0]
+                                previous[name] = list(AGENTS[env.now - 1][name][entry][0].keys())[0]
+                            else:
+                                current[name] = agent[name][entry][0]
+                                previous[name] = AGENTS[env.now - 1][name][entry][0]
 
                     else:
-                        current_bndes_var = previous_bndes_var = current_epm_var = previous_epm_var = 0
+                        for name in list_of_pm:
+                            current[name] = previous[name] = 0
 
                     who = []
-                    if randomly is False:
-                        if env.now > 0 and current_bndes_var != previous_bndes_var:
-                            who.append('BNDES')
-                        elif env.now > 0 and current_epm_var != previous_epm_var:
-                            who.append('EPM')
 
-                    if randomly is True or env.now == 0 or len(who) > 1:
-                        # If random is True, then it is randomized
-                        # If it's the first period, then it must be random
-                        # If both policy makers changed, then it really doesn't matter who follows who
+                    for name in list_of_pm:
+                        if current[name] != previous[name]:
+                            who.append(name)
 
-                        """
-                        It is best to just copy the whole list to avoid destroying entries
-                        """
-                        chosen_agent = random.choice(['BNDES', 'EPM'])
-                        if entry != 'source':
-                            chosen = AGENTS[env.now][chosen_agent][entry]
+                    if len(who) > 0:
+                        # someone changed
 
-                            AGENTS[env.now]['BNDES'][entry] = chosen
-                            AGENTS[env.now]['EPM'][entry] = chosen
+                        if randomly is True or len(who) > 1 or len(list_of_pm) == 3:
+                            # If random is True, then it is randomized
+                            # If more than one policy maker changed, then it really doesn't matter who follows who
+                            # If we have more than one pm, then it's best to keep it randomized
+
+                            """
+                            It is best to just copy the whole list to avoid destroying entries
+                            """
+
+                            chosen_agent = random.choice(who)
+                            if entry != 'source':
+                                chosen = agent[chosen_agent][entry]
+
+                                for name in list_of_pm:
+                                    if name != chosen_agent:
+                                        agent[name][entry] = chosen
+                            else:
+                                chosen_source = list(agent[chosen_agent][entry][0].keys())[0]
+                                for name in list_of_pm:
+                                    agent_source = list(agent[name][entry][0].keys())[0]
+                                    if agent_source != chosen_source and name != chosen_agent:
+                                        agent[name][entry] = agent[name][entry][::-1]
+                                        # we only two renewable sources, so if it's different, by just inverting it, we
+                                        # have what we want
+
+                        # If it's not random, then we have to change to the least updated one
                         else:
-                            AGENTS[env.now][chosen_agent][entry] = AGENTS[env.now][chosen_agent][entry][::-1]
+                            who = random.choice(who)
+                            # if more than one changed, then we randomly select one that changed
 
-                        # If it's not random, then we have to change to the most updated one
+                            for name in list_of_pm:
+                                if entry != 'source' and name != who:
+                                    agent[name][entry] = agent[who][entry]
+                                elif (entry == 'source' and list(agent[who][entry][0].keys())[0] !=
+                                list(agent[name][entry][0].keys())[0]) and name != who:
+                                    name[name][entry] = name[who][entry][::-1]
 
-                        who_else = ['EPM', 'BNDES']
-                        who_else.remove(who[0])
+                LSS_guys = []
 
-                        if entry != 'source':
-                            AGENTS[env.now][who_else[0]][entry] = AGENTS[env.now][who[0]][entry]
-                        else:
-                            AGENTS[env.now][who_else[0]][entry] = AGENTS[env.now][who_else[0]][entry][::-1]
+                for name in list_of_pm:
+                    if AGENTS[env.now][name]['LSS_tot'] > AGENTS[env.now - 1][name]['LSS_tot']:
+                        LSS_guys.append(name)
 
-                bndes_lss_cond = AGENTS[env.now]['BNDES']['LSS_tot'] > AGENTS[env.now - 1]['BNDES']['LSS_tot']
-                epm_lss_cond = AGENTS[env.now]['EPM']['LSS_tot'] > AGENTS[env.now - 1]['EPM']['LSS_tot']
-                if bndes_lss_cond is True and epm_lss_cond is True:
+                # bndes_lss_cond = AGENTS[env.now]['BNDES']['LSS_tot'] > AGENTS[env.now - 1]['BNDES']['LSS_tot']
+                # epm_lss_cond = AGENTS[env.now]['EPM']['LSS_tot'] > AGENTS[env.now - 1]['EPM']['LSS_tot']
+                if len(LSS_guys) > 1:
                     # if both policy makers adapted, then it really doesn't matter who we decrease the LSS count
-                    chosen_agent = random.choice(['BNDES', 'EPM'])
-                    AGENTS[env.now][chosen_agent]['LSS_tot'] -= 1
+                    random.shuffle(list_of_pm) # we have to randomize who will decrease the LSS
+
+                    for number in range(1, len(list_of_pm)):
+                        # print(list_of_pm),
+                        # print(number)
+                        agent[list_of_pm[number]]['LSS_tot'] -= 1
 
                 """elif bndes_lss_cond is True or epm_lss_cond is True:
                     # if just one adapted, then we decrease its LSS
@@ -2498,7 +2596,7 @@ def make_ep(env,
         name = 'EP_' + str(uuid.uuid4().hex)
 
     if wallet is None:
-        wallet = random.uniform(6, 9) * 10 ** 7
+        wallet = random.normalvariate(config.THERMAL['CAPEX'] * int(1500/config.THERMAL['MW']), .1)
     if decision_var is None:
         decision_var = random.uniform(0, 1)
     if current_weight is None:
@@ -2550,7 +2648,7 @@ def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_thresho
         source = random.choice([1, 2])
 
     if wallet is None:
-        wallet = random.uniform(1, 3)*10**6 if source == 1 else random.uniform(1, 2)*10**6
+        wallet = random.uniform(10, 30)*10**6 if source == 1 else random.uniform(1, 2)*10**6
 
     if capacity is None:
         capacity = random.uniform(1, 2)*10**6 if source == 1 else random.uniform(0, 1)*10**6

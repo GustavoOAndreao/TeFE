@@ -22,6 +22,15 @@ def bla():
     return
 
 
+def interesting_FF(value=random.uniform(0,1), max_r=0.011, min_r=0.005, below_min=True, curve=0.5):
+
+    interest = max_r - min_r
+    interest *= (1 - value) ** curve
+    interest += min_r * (1 - value) if below_min is True else min_r
+
+    return interest
+
+
 def normalize(_list):
 
     _list = np.array(_list)
@@ -194,7 +203,7 @@ def finding_FF(complete_dictionary, what,
 
     return {'name': whos[idx],
             'value': whats[idx],
-            'complete_dict_entry': completes[idx]}
+            'complete_dict_entry': completes}  # [idx]}
 
 
 def weighting_FF(time, var, weight, dictionary,
@@ -338,10 +347,22 @@ def private_reporting_FF(genre):
         # 'value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to
         # the get the highest price for the eletrcitity or molecule part.
         lumps = np.floor(demand_now / technology['MW'])
+        try:
+            if source == list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0]:
+                financing_RISK = AGENTS[env.now - 1]['BNDES']['disclosed_var']
+            else:
+                financing_RISK = True  # -1 * AGENTS[env.now - 1]['BNDES']['disclosed_var']
+            interest = r if financing_RISK is True else interesting_FF(financing_RISK)
 
-        NPV = npv_generating_FF(r, technology.get('lifetime'), lumps, technology.get('MW'),
-                                technology.get('building_time'), technology.get('CAPEX'),
-                                technology.get('OPEX'), max_price, technology.get('CF'), AMMORT)
+            NPV = npv_generating_FF(interest, technology.get('lifetime'), lumps, technology.get('MW'),
+                                    technology.get('building_time'), technology.get('CAPEX'),
+                                    technology.get('OPEX'), max_price, technology.get('CF'), AMMORT)
+
+        except:
+            NPV = npv_generating_FF(
+                r, technology.get('lifetime'), lumps, technology.get('MW'),
+                technology.get('building_time'), technology.get('CAPEX'),
+                technology.get('OPEX'), max_price, technology.get('CF'), AMMORT, reinvest=True)
 
         # print(env.now, source, max_price, lumps, NPV)
 
@@ -583,6 +604,8 @@ def thresholding_FF(threshold, disclosed_var, decision_var):
     if not threshold_lower < decision_var < threshold_upper:
         disclosed_var = decision_var
 
+    # print(config.env.now,decision_var, disclosed_var)
+
     return disclosed_var
 
 
@@ -748,6 +771,8 @@ def evaluating_FF(name, add=None, change=None):
 
 def strikable_dicting(strikables_dict):
     removable = []
+    # print('before', strikables_dict)
+
     for _ in strikables_dict:
         i = strikables_dict[_]
         if len(i) == 1:
@@ -759,6 +784,8 @@ def strikable_dicting(strikables_dict):
         strikables_dict = strikables_dict
 
     # ic('strikables_dict', strikables_dict)
+
+    # print('after', strikables_dict)
 
     return strikables_dict
 
@@ -791,18 +818,18 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
             chosen_entry = strikables_dict[striked][chosen]
         else:
 
-            _list = [list(x.values())[0] for x in strikables_dict[striked]]
+            """_list = [list(x.values())[0] for x in strikables_dict[striked]]
             # _list = normalize(_list)
             _sources = [list(x.keys())[0] for x in strikables_dict[striked]]
 
-            chosen_entry = strikables_dict[striked][_list.index(max(_list))]
+            chosen_entry = strikables_dict[striked][_list.index(max(_list))]"""
 
-            """chosen = min(int(
-                np.random.poisson(1)), len(options) - 1)"""
+            chosen = min(int(
+                np.random.poisson(.355)), len(options) - 1)  # this poisson has 70% chance of choosing the first
 
             # print(name, 'went from ', _sources[0], ' to ',  chosen_entry)
 
-            #chosen_entry = sorted(strikables_dict[striked], reverse=True, key=lambda x: list(x.values())[0])[chosen]
+            chosen_entry = sorted(strikables_dict[striked], reverse=True, key=lambda x: list(x.values())[0])[chosen]
 
         # print('before striking', strikables_dict[striked]) if striked == "source" else None
         options.remove(chosen_entry)
@@ -963,6 +990,7 @@ def public_deciding_FF(name):
     else:
         _random = random.normalvariate(previous_var, (1 - past_weight))
         new_value = max(0, min(1, _random))
+    # print(name, env.now, new_value)
 
     return new_value
 
@@ -1004,7 +1032,7 @@ def current_stating_FF(rationale):
 
 
 def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, capacity_factor, ammort_t,
-                      cash_flow_RISK=0, financing_RISK=0, true_capex_and_opex=False):
+                      cash_flow_RISK=0, financing_RISK=0, true_capex_and_opex=False, reinvest=False):
     """ this function produces the NPV for a certain investment. risks set to 0 mean that there exists no risk
 
     :param interest:
@@ -1024,6 +1052,8 @@ def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, cap
     """
     ### Credits to Alexandre Mejdalani from the gavetário ###
 
+    financing_RISK = 0 # we have to deal with this later
+
     CashFlow = []
     if true_capex_and_opex == False:
         caPEX = capex * lumps
@@ -1032,17 +1062,25 @@ def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, cap
         caPEX = capex
         oPEX = opex
 
-    Principal = (1 - financing_RISK) * caPEX * (1 + interest) ** building_t  # Present Value of the Principle
+    if reinvest is False:
+        # Principal = caPEX * (1 + interest * (1 - financing_RISK)) ** building_t  # Present Value of the Principle
+        Principal = caPEX * ((1 + interest) ** building_t)  # Present Value of the Principle
+    else:
+        Principal = 0
+        CashFlow.append(caPEX)
+        for t in range(building_t):
+            CashFlow.append(0)
     Debt = Principal
+
 
     for t in range(time):
 
         inflow = ((p * MW * lumps * (24 * 30 * capacity_factor) - oPEX) * (1 - cash_flow_RISK))
 
         if Debt > 0:
-            Debt *= (1 + interest)
+            Debt *= (1 + interest)  # * (1 - financing_RISK))
 
-            Fee = (Principal / (1 + ammort_t)) + Debt * interest
+            Fee = (Principal / (1 + ammort_t)) + Debt * interest  # * (1 - financing_RISK)
 
             Debt -= Fee
 
@@ -1050,6 +1088,7 @@ def npv_generating_FF(interest, time, lumps, MW, building_t, capex, opex, p, cap
 
         CashFlow.append(inflow)
 
+    # NPV = [CashFlow[t] / ((1 + interest * (1 - financing_RISK))) ** t for t in range(len(CashFlow))]
     NPV = [CashFlow[t] / ((1 + interest) ** t) for t in range(len(CashFlow))]
 
     return sum(NPV)
@@ -1175,7 +1214,8 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
     # print('prices at time', env.now, source_price)
 
-    interest_r = r * (1 + value) if genre == 'BB' else r * (1 - value)  # if the agent is a private bank it increases
+    interest_r = r * (1 + value) if genre == 'BB' else interesting_FF(value)
+    # if the agent is a private bank it increases
     # the general interest rate by (1+risk), on the other hand, if the agent is the development bank it reduces the
     # general interest rate by (1-effort)
 
@@ -1192,18 +1232,21 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                     financing_risk = 0 if i.get('guarantee') is True or genre == 'DBB' else value
                 else:
                     financing_risk = 0
-                cash_flow_risk = 0 if i.get('auction_contracted') == True or genre == 'DBB' else value
-                price = i.get('price') if i.get('auction_contracted') == True else source_price.get(i.get('source'))
+                cash_flow_risk = 0 if i['auction_contracted'] == True else config.RISKS[i['source']]
+                if i['auction_contracted'] == True:
+                    price = max(i['auction_price'], source_price[i['source']])
+                else:
+                    price = source_price[i['source']]
                 NPV = npv_generating_FF(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
-                                        AMMORT, cash_flow_risk, financing_risk, True)
+                                        AMMORT, cash_flow_risk, financing_risk, true_capex_and_opex=True)
                 # print('at', env.now, 'project from', i.get('receiver'), i.get('TP'), 'has this NPV', NPV)
                 """ic(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, True, NPV, i['source'])"""
                 adressed_projects_NPVs.append({'code': _, 'NPV': NPV})
                 adressed_projects.update({_: i.copy()})
-        adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x.get('NPV'), reverse=True)
+        adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['NPV'], reverse=True)
 
     for project in adressed_projects_NPVs:
         i = project.get('code')
@@ -1230,7 +1273,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                 prod_cap_pct = (AGENTS[env.now - 1][j['TP']]['prod_cap_pct'][0] /
                                 AGENTS[env.now - 1][j['TP']]['prod_cap_pct'][1])
 
-            acceptance_cond = (k == accepted_source) and prod_cap_pct > (1-value) and npv > NPV_THRESHOLD_DBB
+            acceptance_cond = (k == accepted_source) #  and prod_cap_pct > (1-value) and npv > NPV_THRESHOLD_DBB
             # ic(k, accepted_source, prod_cap_pct > (1-value))
 
         """if AGENTS[env.now-1]['DD']['Remaining_demand']>0:
@@ -1258,7 +1301,12 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                     'status': 'financed',
                     'ammortisation': env.now + 1 + AMMORT,
                     'risk': RISKS[k],
-                    'principal': j.get('CAPEX') * (interest_r ** j.get('building_time'))})
+                    'principal': j.get('CAPEX') * (interest_r ** j.get('building_time')),
+                    'r': interest_r})
+
+
+
+                new_contract['debt'] = new_contract['principal']
 
                 """if 'guarantee' not in new_contract:
                     new_contract.update({'guarantee': False})"""

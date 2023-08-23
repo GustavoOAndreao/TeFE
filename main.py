@@ -63,11 +63,6 @@ def run_sim(_seed, _name='test', random_run=False):
 
     # del sys.modules['config']
 
-    if ['config', 'agents']:
-        if name in sys.modules:  # Is the ``math`` module in the register?
-            del sys.modules['math']  # If so, remove it.
-            print('deleted it')
-
     importlib.invalidate_caches()
     import simpy
     # print(vars(config)['config_name'])
@@ -81,7 +76,7 @@ def run_sim(_seed, _name='test', random_run=False):
     reload(sys.modules[__init__.config_name[0]]) if _seed > start_seed else None
     sys.modules[__init__.config_name[0]] = config
 
-    print('run', __init__.config_name[0], config.config_name)
+    # print('run', __init__.config_name[0], config.config_name)
     # import config
     #
     # config = importlib.import_module('config')
@@ -136,26 +131,23 @@ def run_sim(_seed, _name='test', random_run=False):
                 agent = config.AGENTS[period][entry]
 
                 if agent['genre'] != 'DD':
-                    try:
-                        # print('before', agent['genre'], agent)  # if agent['genre'] not in ['DBB', 'EPM'] else None
-                        if agent['genre'] == 'EP':
-                            del agent['portfolio_of_projects']
-                            del agent['portfolio_of_plants']
-
-                        for _entry in list(agent.keys()):
-                            """print(agent['name'], _entry, list(agent.keys()), agent['genre'], config.ENTRIES_TO_SAVE[agent['genre']],
-                                  _entry in config.ENTRIES_TO_SAVE[agent['genre']])"""
-                            # print('keys', list(agent.keys()))
-                            if _entry in agent['strikables_dict'] and _entry in config.ENTRIES_TO_SAVE[agent['genre']]:  # and _entry != 'source':
-                                agent[_entry] = agent[_entry][0]
-                            elif _entry not in config.ENTRIES_TO_SAVE[agent['genre']]:
-                                # print(config.ENTRIES_TO_SAVE[agent['genre']])
-                                del agent[_entry]
-
-                        del agent['strikables_dict']
-
-                    except:
-                        None
+                    # print('before', agent['genre'], agent)  # if agent['genre'] not in ['DBB', 'EPM'] else None
+                    if agent['genre'] == 'EP':
+                        del agent['portfolio_of_projects']
+                        del agent['portfolio_of_plants']
+                    for _entry in list(agent.keys()):
+                        """print(agent['name'], _entry, list(agent.keys()), agent['genre'], config.ENTRIES_TO_SAVE[agent['genre']],
+                              _entry in config.ENTRIES_TO_SAVE[agent['genre']])"""
+                        # print('keys', list(agent.keys()))
+                        _to_save = config.ENTRIES_TO_SAVE[agent['genre']]
+                        if ((isinstance(agent[_entry], list)) and _entry != 'strikables_dict') and _entry in _to_save:
+                            agent[_entry] = agent[_entry][0]
+                        if _entry not in _to_save and _entry != 'strikables_dict':
+                            # print(config.ENTRIES_TO_SAVE[agent['genre']])
+                            # print(config.ENTRIES_TO_SAVE[agent['genre']])
+                            del agent[_entry]
+                    print(agent['strikables_dict']) if agent['genre'] in ['EPM', 'TPM', 'DBB'] and entry == 300 else None
+                    del agent['strikables_dict']
                     # print('after the', agent)
                     """if agent['genre'] == 'EP':
                         # agent['portfolio_of_projects'] = str(agent['portfolio_of_projects'])
@@ -227,80 +219,72 @@ def run_sim(_seed, _name='test', random_run=False):
 
 
 if __name__ == '__main__':
-    files = [os.environ['_name_o_run']]
-    for file in files:
-        RUN_TIMES = 2  # 100
-        global_start = timeit.default_timer()
-
-        # from config import name
-        """try:
-            del __init__
-            del config
-            del agents
-            importlib.invalidate_caches()
-            import __init__
-            print('deleted')
-        except:
-            None"""
+    file = os.environ['_name_o_run']
+    RUN_TIMES = 100
+    global_start = timeit.default_timer()
+    # from config import name
+    """try:
+        del __init__
+        del config
+        del agents
+        importlib.invalidate_caches()
         import __init__
-        reload(__init__)
+        print('deleted')
+    except:
+        None"""
+    import __init__
+    reload(__init__)
 
-        __init__.config_name = {0: '_config____' + file}
-        # print('main', __init__.config_name)
-        __init__.agents_name = {0: '_agents____' + file}
+    __init__.config_name = {0: '_config____' + file}
+    # print('main', __init__.config_name)
+    __init__.agents_name = {0: '_agents____' + file}
 
+    # config = __import__('_config____1_YES_YES')
+    # agents = __import__('_agents____1_YES_YES')
+    from config import name
+    # print('WE SHALL START THE ' + name + ' RUNS')
 
-        # config = __import__('_config____1_YES_YES')
-        # agents = __import__('_agents____1_YES_YES')
-        from config import name
-        # print('WE SHALL START THE ' + name + ' RUNS')
+    import config
 
-        import config
+    """
+    First simulation runs a little bizarre, so we always ignore it
+    """
 
-        """
-        First simulation runs a little bizarre, so we always ignore it
-        """
+    list_o_runs = [False]  # , True]  # both runs  # True is random, False is normal
 
-        list_o_runs = [False]  # , True]  # both runs  # True is random, False is normal
+    start_seed = 90  # remember: we skip it
 
-        start_seed = 0  # remember: we skip it
+    for seed in range(start_seed, RUN_TIMES + 1):
+        for type_o_run in list_o_runs:
+            random_run = type_o_run
+            start = timeit.default_timer() if seed == start_seed + 1 else None
+            print('Simulation is starting') if seed > start_seed and random_run is False else None
+            print('Random run is starting') if seed > start_seed and random_run is True else None
 
-        for seed in range(start_seed, RUN_TIMES + 1):
-            for type_o_run in list_o_runs:
-                random_run = type_o_run
-                start = timeit.default_timer() if seed == start_seed + 1 else None
-                print('Simulation is starting') if seed > start_seed and random_run is False else None
-                print('Random run is starting') if seed > start_seed and random_run is True else None
+            run_sim(seed, name) if random_run is False else run_sim(seed, name, random_run=True)
+            if seed == start_seed:
+                break
+            stop = timeit.default_timer() if seed == start_seed + 1 else None
 
-                run_sim(seed, name) if random_run is False else run_sim(seed, name, random_run=True)
-                if seed == start_seed:
-                    break
-                stop = timeit.default_timer() if seed == start_seed + 1 else None
+            printable_1 = 'SEED IS ' + str(seed) + " AND THIS IS RUN " + str(
+                seed) + " OF " + str(RUN_TIMES) if seed > start_seed and random_run is False else None
+            print(printable_1) if random_run is False else None
 
-                printable_1 = 'SEED IS ' + str(seed) + " AND THIS IS RUN " + str(
-                    seed) + " OF " + str(RUN_TIMES) if seed > start_seed and random_run is False else None
-                print(printable_1) if random_run is False else None
+            cond = seed == start_seed + 1 and random_run is False
+            printable_2 = " AND IT WILL TAKE ROUGHLY " + str(
+                ((stop - start) / 60) * len(list_o_runs) * RUN_TIMES) + ' MINUTES (' + str(stop - start) + \
+                          ' seconds for each run)' if cond is True else None
+            print(printable_2) if cond is True else None
 
-                cond = seed == start_seed + 1 and random_run is False
-                printable_2 = " AND IT WILL TAKE ROUGHLY " + str(
-                    ((stop - start) / 60) * len(list_o_runs) * RUN_TIMES) + ' MINUTES (' + str(stop - start) + \
-                              ' seconds for each run)' if cond is True else None
-                print(printable_2) if cond is True else None
+    # reload(config)
+    # sys.modules[__init__.config_name[0]] = agents
+    # del sys.modules[__init__.config_name[0]]
+    # import config
+    # reload(__init__)
 
-        # reload(config)
-        # sys.modules[__init__.config_name[0]] = agents
-        # del sys.modules[__init__.config_name[0]]
-        # import config
-        # reload(__init__)
-
-        global_stop = timeit.default_timer()
-        print('IT TOOK ' + str(round((global_stop - global_start) / 60, 2)) + ' MINUTES TO RUN THE ' + str(RUN_TIMES) + " " + name +
-              ' SIMULATIONS (double it for the random runs and give it to the next person)')
-
-
-
-        # sys.modules.pop(__init__.agents_name[0])
-        # sys.modules.pop(__init__.config_name[0])
+    global_stop = timeit.default_timer()
+    print('IT TOOK ' + str(round((global_stop - global_start) / 60, 2)) + ' MINUTES TO RUN THE ' + str(RUN_TIMES) + " " + name +
+          ' SIMULATIONS (double it for the random runs and give it to the next person)')
 
     duration = 1500  # milliseconds
     freq = 440  # Hz

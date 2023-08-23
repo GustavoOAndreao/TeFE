@@ -6,7 +6,7 @@ import json
 import timeit
 import pickle
 import time
-import config
+# import config
 import pyarrow
 import random
 import winsound
@@ -32,7 +32,7 @@ def flatten_json_iterative_solution__(dictionary, period, seed, max_level=2):
 
         # print(parent_key, parent_value)
 
-        if level < max_level+500:  # or parent_key.isnumeric() is False:
+        if level < max_level+1:  # or parent_key.isnumeric() is False:
             if isinstance(parent_value, dict):
                 for key, value in parent_value.items():
                     temp1 = parent_key + '_' + key if level > 1 else key
@@ -41,7 +41,7 @@ def flatten_json_iterative_solution__(dictionary, period, seed, max_level=2):
                 # print(parent_key, parent_value)
                 i = 0
                 for value in parent_value:
-                    temp2 = parent_key + '_' + str(i) if level > 1 else str(i)
+                    temp2 = parent_key # + '_' + str(i) if level > 1 else str(i)
                     i += 1
                     yield temp2, value
             else:
@@ -219,6 +219,10 @@ if __name__ == '__main__':
 
     list_of_dirs = next(os.walk('.'))[1]
     list_of_dirs.remove('Figures')
+    try:
+        list_of_dirs.remove('__pycache__')
+    except:
+        None
 
     # list_of_dirs = ['1_NO_NO'] # ['0_YES_YES']  # uncomment and put the directory name to override checking all directories
 
