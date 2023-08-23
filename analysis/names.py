@@ -1,0 +1,15 @@
+names = {'profits': 'Profits',
+         "private agents": 'firms',
+         "public agents": 'policy makers',
+         "LSS_weak": 'Change in effort',
+         "LSS_tot": 'Adaptations',
+         "current_state": 'Goal achievement',
+         "current_state_norm": 'goal achievement',
+         "05_YES_YES": 'Half homogeneity - ',
+         "1_YES_YES": 'No homogeneity - ',
+         "0_YES_YES": 'Full homogeneity - ',
+         "1_YES_NO": 'Just public bank - ',
+         "1_NO_YES": 'Just energy policy maker - ',
+         "1_NO_NO": 'No policy maker - ',
+         "period": 'Period'
+         }
