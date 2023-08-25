@@ -35,8 +35,8 @@ config.BB_NUMBER = len(PRIVATE_BANK)
 
 DEMAND = [Demand(env=env,
                  initial_demand=INITIAL_DEMAND,
-                 when=1,
-                 increase=INITIAL_DEMAND * random.uniform(0.001, 0.005))]
+                 when=12,
+                 increase=0)] # INITIAL_DEMAND * random.uniform(0.00005, 0.00015))]
 
 # ic(DEMAND)
 

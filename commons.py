@@ -348,7 +348,7 @@ def private_reporting_FF(genre):
         # the get the highest price for the eletrcitity or molecule part.
         lumps = np.floor(demand_now / technology['MW'])
         try:
-            if source == list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0]:
+            if source == list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0] and technology['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']:
                 financing_RISK = AGENTS[env.now - 1]['BNDES']['disclosed_var']
             else:
                 financing_RISK = True  # -1 * AGENTS[env.now - 1]['BNDES']['disclosed_var']
@@ -1196,8 +1196,10 @@ def capital_adequacy_rationing_FF(receivables_dict, wallet):
 
 
 def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
-                 guaranteeing=False, accepted_source=None):
+                 guaranteeing=False, accepted_source=None, accepted_tps=None):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, BASEL, AMMORT, NPV_THRESHOLD, NPV_THRESHOLD_DBB, INSTRUMENT_TO_SOURCE_DICT, RISKS, TP_THERMAL_PROD_CAP_PCT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.NPV_THRESHOLD, config.NPV_THRESHOLD_DBB, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.TP_THERMAL_PROD_CAP_PCT, config.env
+
+    global new_wallet
 
     new_wallet = my_wallet
     new_receivables = my_receivables.copy()
@@ -1214,11 +1216,6 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
     # print('prices at time', env.now, source_price)
 
-    interest_r = r * (1 + value) if genre == 'BB' else interesting_FF(value)
-    # if the agent is a private bank it increases
-    # the general interest rate by (1+risk), on the other hand, if the agent is the development bank it reduces the
-    # general interest rate by (1-effort)
-
     time = env.now - 1  # - 1  # if genre == 'BB' else env.now -1  # The DBB looks at the present period
 
     if env.now > 0 and len(CONTRACTS.get(time)) > 0:  # and car_ratio >= BASEL:
@@ -1227,7 +1224,20 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
             i = CONTRACTS.get(time).get(_).copy()
             """ the bank only appends that project if its addressed to it, is a project and it would accept to finance 
             such source"""
+
             if i.get('receiver') == name and i.get('status') == 'project':
+
+                if genre == 'BB':
+                    interest_r = r * (1 + value)
+                else:
+                    if i['source'] == accepted_source and i['TP'] in accepted_tps:
+                        interest_r = interesting_FF(value)
+                    else:
+                        interest_r = r
+                # if the agent is a private bank it increases
+                # the general interest rate by (1+risk), on the other hand, if the agent is the development bank it reduces the
+                # general interest rate by (1-effort)
+
                 if genre == 'BB':
                     financing_risk = 0 if i.get('guarantee') is True or genre == 'DBB' else value
                 else:
@@ -1244,9 +1254,12 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                 """ic(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, True, NPV, i['source'])"""
-                adressed_projects_NPVs.append({'code': _, 'NPV': NPV})
+                adressed_projects_NPVs.append({'code': _, 'NPV': NPV, 'capex': i['CAPEX']})
                 adressed_projects.update({_: i.copy()})
-        adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['NPV'], reverse=True)
+        if genre == 'BB':
+            adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['NPV'], reverse=True)
+        else:
+            adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['capex'])
 
     for project in adressed_projects_NPVs:
         i = project.get('code')
@@ -1265,16 +1278,17 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         # ic(j)
         # tresHOLD = NPV_THRESHOLD if genre == 'BB' else NPV_THRESHOLD_DBB
         if genre == 'BB':
-            acceptance_cond = RISKS[k] < value and npv > NPV_THRESHOLD
+            acceptance_cond = RISKS[k] < value and npv > NPV_THRESHOLD and new_new_wallet >= 0
         else:
-            if j['TP'] == 'TP_thermal':
-                prod_cap_pct = TP_THERMAL_PROD_CAP_PCT
+            if config.FUSS_PERIOD < env.now or AGENTS[env.now - 1]['DD']['Remaining_demand'] < 0:
+                acceptance_cond = k == accepted_source and j['TP'] in accepted_tps and new_new_wallet >= 0  # and car_ratio >= BASEL
+                print(env.now , 'FLAMENGO') if acceptance_cond == True else print(env.now , 'fogão because', k == accepted_source, j['TP'] in accepted_tps, new_new_wallet >= 0)
+                # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond, car_ratio) if acceptance_cond == True else None
             else:
-                prod_cap_pct = (AGENTS[env.now - 1][j['TP']]['prod_cap_pct'][0] /
-                                AGENTS[env.now - 1][j['TP']]['prod_cap_pct'][1])
-
-            acceptance_cond = (k == accepted_source) #  and prod_cap_pct > (1-value) and npv > NPV_THRESHOLD_DBB
-            # ic(k, accepted_source, prod_cap_pct > (1-value))
+                # if there is no excess demand, BNDES doesn't finance capacity
+                acceptance_cond = new_new_wallet >= 0  # and car_ratio >= BASEL
+                print(env.now , 'vasquinho') if acceptance_cond == True else print(env.now , 'fluzão')
+            # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond)
 
         """if AGENTS[env.now-1]['DD']['Remaining_demand']>0:
             acceptance_cond=True""" # This was previously here to ensure that some capacity would be financed
@@ -1282,8 +1296,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         # ic(k, accepted_source, prod_cap_pct, (1-value), npv, car_ratio, BASEL, name, acceptance_cond)
         # print(name, acceptance_cond, new_new_wallet >= 0, car_ratio >= BASEL)
         # print(acceptance_cond is True and new_new_wallet >= 0 and car_ratio >= BASEL)
-        if acceptance_cond == True and new_new_wallet >= 0: # and car_ratio >= BASEL:
-            # print('FLAMENGO')
+        if acceptance_cond == True:  # and car_ratio >= BASEL:
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
             # print("new contract", j)
@@ -1303,8 +1316,6 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                     'risk': RISKS[k],
                     'principal': j.get('CAPEX') * (interest_r ** j.get('building_time')),
                     'r': interest_r})
-
-
 
                 new_contract['debt'] = new_contract['principal']
 
@@ -1327,6 +1338,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                 new_contract.update({'guarantee': False})"""
         CONTRACTS.get(env.now).update({i: new_contract})
 
+    # print(env.now, my_wallet, new_wallet, 'wallets')
     my_wallet = new_wallet
     my_receivables = new_receivables
     return {'wallet': my_wallet, 'receivables': my_receivables, 'financing_index': financing_index}

@@ -252,7 +252,7 @@ if __name__ == '__main__':
 
     list_o_runs = [False]  # , True]  # both runs  # True is random, False is normal
 
-    start_seed = 90  # remember: we skip it
+    start_seed = 0  # remember: we skip it
 
     for seed in range(start_seed, RUN_TIMES + 1):
         for type_o_run in list_o_runs:

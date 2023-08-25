@@ -109,6 +109,8 @@ class TP(object):
         self.strikables_dict = strikable_dicting(strikables_dict)
         self.starting_tech_age = starting_tech_age
         self.prod_cap_pct = [0, 1]
+        self.radical = 0
+        self.marginal = 0
 
         # ic(name, wallet, capacity, Technology, RnD_threshold, capacity_threshold,decision_var, cap_conditions, impatience, past_weight, LSS_thresh, memory, discount,strategy, starting_tech_age)
 
@@ -140,7 +142,9 @@ class TP(object):
             self.strikables_dict,
             self.dd_profits,
             self.starting_tech_age,
-            self.prod_cap_pct
+            self.prod_cap_pct,
+            self.radical,
+            self.marginal
         ))
 
 
@@ -171,7 +175,10 @@ def run_TP(name,
            strikables_dict,
            dd_profits,
            starting_tech_age,
-           prod_cap_pct):
+           prod_cap_pct,
+           radical,
+           marginal
+):
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env  # globals
 
     while True:
@@ -191,6 +198,12 @@ def run_TP(name,
         _strategy = strategy[0] if env.now == 0 else AGENTS[env.now - 1][name]['strategy'][0]
         value = decision_var
         profits = 0  # in order to get the profits of this period alone
+
+        RandD = int(RandD)
+        RnD_threshold = int(RnD_threshold)
+
+        # radical = 0
+        # marginal = 0
 
         #################################################################
         #                                                               #
@@ -222,8 +235,10 @@ def run_TP(name,
                 i = CONTRACTS[env.now - 1][_]
                 if i['receiver'] == name and i['sender'] == 'TPM':
                     incentive = i['value']
+                    prod_cap_pct[1] += incentive
                     if i['bound'] == 'capacity':
                         capacity += incentive
+                        prod_cap_pct[0] += incentive
                     elif i['bound'] == 'innovation':
                         RandD += incentive
                     else:
@@ -282,8 +297,7 @@ def run_TP(name,
             })
         else:
             """ the technology is transportable (e.g. solar panels)"""
-            i = Technology['CAPEX']
-            Technology.update({"base_CAPEX": i})
+            Technology.update({Technology['CAPEX'] : Technology["base_CAPEX"]})
 
         """3) now, if the TP has money, it will spend it on either capacity, imitation or innovation"""
         # ic(name, wallet, _strategy, value, env.now)
@@ -300,21 +314,27 @@ def run_TP(name,
                 # print(name, 'got', wallet * value, 'more capacity to its roster, and now capacity is', capacity)
 
         """4) we have to check if the TP reached the threshold for innovation or imitation"""
-        a = 0
-        if RandD > RnD_threshold:  # and (strategy == 'innovation' or strategy == 'imitation'):
+        # a = 0
+        # print("R&D and capacity", env.now, value,  name, RandD, capacity, RnD_threshold - RandD)
+        RnD_threshold *= (1 - _discount)
+        # innovation_index *= (1 - _discount)
+        # print(env.now, name, "RandD", RandD, "RnD_threshold", RnD_threshold)
+        if RandD > RnD_threshold and env.now > config.FUSS_PERIOD:  # and (strategy == 'innovation' or strategy == 'imitation'):
             """ then we get the 'a' which can either be a poisson + normal for innovation, or a simple binomial.
              Values above or equal (for the imitation) 1 indicate that innovation or imitation occured """
-            tech_age = starting_tech_age + innovation_index
-            a = (1/tech_age) * np.random.poisson(1) + (1 - 1/tech_age) * np.random.normal(0, 1)
-
-            """ if we reached the threshold, then we to set the bar of the RnD """
-            RnD_threshold += random.uniform(RandD, RandD*a)
+            # print('radical', name, radical)
+            tech_age = starting_tech_age + radical # + 0.01 * marginal # + innovation_index * 0.01
+            a = np.random.poisson(1 + 1/tech_age) + np.random.normal(0, 1)
+            # a = np.random.poisson(1 / tech_age) + np.random.normal(0, 1 - 1/tech_age)
+            print(env.now, 1 / tech_age, name, a, 'radical', radical)
 
             if a > 1:
+                # print('innovation was', env.now, name, a, RnD_threshold , RandD)  # , RandD > (RnD_threshold))
                 innovation_index += a
                 """ we are dealing with innovation """
                 true_innovation_index += a
-                RnD_threshold *= rNd_INCREASE * a
+                RnD_threshold *= a  # ** (1 + rNd_INCREASE)
+                # print('RnD_threshold', math.e ** ((1 - 1/tech_age) + rNd_INCREASE),  a)
                 """ we have to check where did the innovation occur"""
                 what_on = random.choice(['base_CAPEX', 'OPEX', 'MW'])
                 """ if innovation ocurred then we multiply it"""
@@ -328,12 +348,17 @@ def run_TP(name,
                 if a > RADICAL_THRESHOLD:
                     """ if we reached over the radical innovation threshold we have to signal it """
                     radical_or_not = 'last_radical_innovation'
+                    radical += 1
                 else:
                     """ we did not reach over that threshold, so it was a marginal innovation """
                     radical_or_not = 'last_marginal_innovation'
+                    marginal += 1
                 Technology.update({
                     radical_or_not: env.now
                 })
+
+                """ if we reached the threshold, then we to set the bar of the RnD """
+                RnD_threshold += random.uniform(0, RandD)
 
         """6) lastly, we have to get the self.NPV of its current technology"""
         if env.now > 0:
@@ -413,7 +438,9 @@ def run_TP(name,
                   "LSS_tot": LSS_tot,
                   "prod_cap_pct": prod_cap_pct,
                   "strikables_dict": strikables_dict,
-                  'PCT': prod_cap_pct[0]/prod_cap_pct[1]
+                  'PCT': prod_cap_pct[0]/prod_cap_pct[1],
+                  "radical": radical,
+                  "marginal": marginal,
                   }
 
         if env.now > 1:
@@ -438,7 +465,7 @@ class TPM(object):
         self.genre = 'TPM'
         self.subgenre = 'TPM'
         self.name = 'TPM'
-        self.wallet = wallet
+        self._wallet = wallet
         self.boundness_cost = boundness_cost
         self.instrument = instrument
         self.source = source
@@ -470,7 +497,7 @@ class TPM(object):
         self.action = env.process(run_TPM(self.genre,
                                           self.subgenre,
                                           self.name,
-                                          self.wallet,
+                                          self._wallet,
                                           self.boundness_cost,
                                           self.instrument,
                                           self.source,
@@ -492,7 +519,7 @@ class TPM(object):
 def run_TPM(genre,
             subgenre,
             name,
-            wallet,
+            _wallet,
             boundness_cost,
             instrument,
             source,
@@ -529,6 +556,9 @@ def run_TPM(genre,
         _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
         value = disclosed_var
+        # wallet = _wallet if not env.now > 0 and env.now % 12 == 0 else AGENTS[0][name]['wallet'] # the budget is monthly
+        wallet = _wallet  # if not env.now % 12 == 0 else 0
+        # wallet += AGENTS[0][name]['wallet'] if env.now > 0 and env.now % 12 == 0 else _wallet # the budget is monthly
 
         #################################################################
         #                                                               #
@@ -581,6 +611,8 @@ def run_TPM(genre,
                     wallet -= budget
 
             # value = disclosed_var
+
+        # _wallet += wallet # all non-used budget is kept for next month
 
         if env.now > 1:
             add_source = source_reporting_FF(name, _past_weight)
@@ -1040,7 +1072,7 @@ class DBB(object):
         self.guaranteed_contracts = []
         self.genre = 'DBB'
         self.name = name
-        self.wallet = wallet
+        self._wallet = wallet
         self.instrument = instrument
         self.source = source
         self.decision_var = decision_var
@@ -1058,6 +1090,7 @@ class DBB(object):
         self.receivable = {0: 0, 1: 0, 2: 0}
         self.car_ratio = 0
         self.LSS_tot = 0
+        self.accepted_tps = []
         # self.subgenre = 'DBB'
         # self.dd_qual_vars = dd_qual_vars
         # self.dd_policy = dd_policy
@@ -1085,7 +1118,7 @@ class DBB(object):
             self.guaranteed_contracts,
             self.genre,
             self.name,
-            self.wallet,
+            self._wallet,
             self.instrument,
             self.source,
             self.decision_var,
@@ -1103,14 +1136,15 @@ class DBB(object):
             self.receivable,
             self.car_ratio,
             self.strikables_dict,
-            self.LSS_tot))
+            self.LSS_tot,
+            self.accepted_tps))
 
 
 def run_DBB(NPV_THRESHOLD_DBB,
             guaranteed_contracts,
             genre,
             name,
-            wallet,
+            _wallet,
             instrument,
             source,
             decision_var,
@@ -1128,7 +1162,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
             receivable,
             car_ratio,
             strikables_dict,
-            LSS_tot):
+            LSS_tot,
+            accepted_tps):
 
     global decisions
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.AGENTS_r, config.env  # globals
@@ -1152,6 +1187,9 @@ def run_DBB(NPV_THRESHOLD_DBB,
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
         LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         value = disclosed_var
+        wallet = _wallet if not env.now % 12 == 0 else 0
+        wallet += AGENTS[0][name]['wallet'] if env.now > 0 and env.now % 12 == 0 else _wallet  # the budget is monthly
+        # print(wallet, 'wallet')
 
         #################################################################
         #                                                               #
@@ -1228,10 +1266,42 @@ def run_DBB(NPV_THRESHOLD_DBB,
                 budget = entry['budget']
                 entry_value = disclosed_var
 
+                tps = []
+                tp_value = []
+                accepted_tps = []  # if env.now % 24 == 0 else list(set(accepted_tps))
+                for _ in AGENTS[env.now]:
+
+                    tp = AGENTS[env.now][_]
+
+                    # tps[tp['name']] = 0
+                    if tp['genre'] == 'TP':
+                        if _rationale == 'green':
+                            tpupdate = tp['Technology']['avoided_emissions'] / tp['Technology']['MW']
+
+                        elif _rationale == 'innovation':
+                            tpupdate = tp['RandD']
+
+                        else:
+                            tpupdate = tp['capacity']
+
+                        if entry_chosen_source == tp['Technology']['source']:
+                            tps.append({tp['name']: tpupdate})
+                            tp_value.append(tpupdate)
+
+                tps.sort(key=lambda x: list(x.values())[0], reverse=True)
+                thresh = np.quantile(tp_value, (env.now/config.SIM_TIME))
+
+                for tp in tps:
+                    if list(tp.values())[0] >= thresh:
+                        accepted_tps.append(list(tp.keys())[0])
+
+                # print('dbb', env.now, thresh, accepted_tps, env.now/config.SIM_TIME)
+
                 if entry_instrument == 'finance':
                     # print('DBB is trying to finance')
+
                     financing = financing_FF(genre, name, wallet, receivable, entry_value, financing_index,
-                                             accepted_source=entry_chosen_source)
+                                             accepted_source=entry_chosen_source, accepted_tps=accepted_tps)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
@@ -1239,12 +1309,15 @@ def run_DBB(NPV_THRESHOLD_DBB,
                 elif entry_instrument == 'guarantee':
                     """ We are dealing with guarantees """
                     financing = financing_FF(genre, name, wallet, receivable, entry_value, financing_index,
-                                             guaranteeing=True, accepted_source=entry_chosen_source)
+                                             guaranteeing=True, accepted_source=entry_chosen_source,
+                                             accepted_tps=accepted_tps)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
                     financing_index = financing['financing_index']
 
+        # print('DBB wallet' , wallet)
+        # _wallet += wallet # all non-used budget is kept for next month
         #################################################################
         #                                                               #
         #    Now, the DBB analyses what happened to the system due to   #
@@ -1302,7 +1375,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "strikables_dict": strikables_dict,
             "current_state": current_stating_FF(_rationale),
             "LSS_tot": LSS_tot,
-            "interest_rate": 1+r-disclosed_var
+            "interest_rate": 1+r-disclosed_var,
+            "accepted_tps": accepted_tps
         }
 
         if env.now > 1:
@@ -1786,6 +1860,7 @@ def run_EP(env,
 
                 if i['retirement'] <= env.now:
                     i['status'] = 'retired'
+                    print(_, 'was retired')
 
                 """ 3) and we check if plants finished building """
 
@@ -1884,12 +1959,24 @@ def run_EP(env,
         #                                                           #
         #############################################################
         if env.now > 0 and env.now % periodicity == 0:
-            mix_expansion = ((
-                                     DEMAND.copy()[env.now-1] * value + max(
-                                 AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'],
-                             0) / (24 * 30)
-                             ) / EP_NUMBER)
-            # ic(mix_expansion, value) if env.now> config.FUSS_PERIOD else None
+
+            if value > 0:
+                remain = AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (
+                            24 * 30 * EP_NUMBER ** math.e ** (value))
+            else:
+                remain = 0
+            self_expansion = DEMAND.copy()[env.now-1]  / EP_NUMBER ** math.e ** (1-value)
+
+            # mix_expansion = random.uniform(5, 100)
+
+            mix_expansion = (remain + self_expansion) # / EP_NUMBER ** math.e ** (1-value)
+
+            print(env.now, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion)
+
+            if len(MIX[env.now-1]) == 0 and ('BNDES' not in AGENTS[env.now - 1] and config.BB_NUMBER == 0):
+                mix_expansion = TECHNOLOGIC[env.now-1]['TP_thermal']['CAPEX'] / max(1, wallet)
+                # print(mix_expansion)
+            # ic(mix_expansion,remain/ EP_NUMBER ** math.e ** (1-value), self_expansion/ EP_NUMBER ** math.e ** (1-value), value, _source) #  if env.now> config.FUSS_PERIOD else None
             # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
             """if AGENTS[env.now-1]['DD']['Remaining_demand'] > 0:
                 condition = True
@@ -1922,9 +2009,11 @@ def run_EP(env,
                   'CAPEX': 0,
                   'OPEX': 0
                   }
-            for _ in TECHNOLOGIC[env.now - 1]:
-                i = TECHNOLOGIC[env.now - 1][_]
-                if i['source'] == _source:
+            tech = list(TECHNOLOGIC[env.now - 1].copy().values())
+            random.shuffle(tech)
+
+            for i in tech:
+                if i['source'] == _source or ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES:
                     try:
                         source_price = max(
                             weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
@@ -1934,9 +2023,22 @@ def run_EP(env,
                         source_price = config.STARTING_PRICE
 
                     # print(source_price)
-                    Lumps = min(max(1, np.ceil(mix_expansion / i['MW'])), max_lump[_source])
+                    # Lumps = min(max(1, np.ceil(mix_expansion / i['MW'])), max_lump[_source])
+
+                    Lumps = min(np.ceil(mix_expansion / i['MW']), max_lump[_source])
+
+                    if Lumps < 1 and not (('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES):
+                        # we want to contract less than a single lump of investment
+                        print('break stuff')
+                        continue
+                    elif Lumps < 1 and ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES:
+                        Lumps = self_expansion
+                        print('when the levee breaks')
+
+                    # print(Lumps)
                     price = source_price
                     cash_flow_RISK = config.RISKS[_source] if _source not in config.AUCTION_WANTED_SOURCES else 0
+                    # ic(config.RISKS)
                     # print(env.now, _source, cash_flow_RISK)
                     try:
                         """financing_RISK = 1 - (AGENTS[env.now - 1]['BNDES']['financing_index'][_source] /
@@ -1945,7 +2047,8 @@ def run_EP(env,
                                                   )
                                               )"""
                         # print(list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0])
-                        if _source == list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0]:
+                        # ic(_source,list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0], i['name'],AGENTS[env.now - 1]['BNDES']['accepted_tps'])
+                        if i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']:
                             financing_RISK = AGENTS[env.now - 1]['BNDES']['disclosed_var']
                         else:
                             financing_RISK = True  # -1 * AGENTS[env.now - 1]['BNDES']['disclosed_var']
@@ -1960,9 +2063,24 @@ def run_EP(env,
                                 r, i['lifetime'], Lumps, i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], price,
                                 i['CF'], AMMORT, cash_flow_RISK=cash_flow_RISK, reinvest=True)
 
-                    if NPV > 0 and (NPV > _TP['NPV'] or random.uniform(0,1)> config.INITIAL_RANDOMNESS):
+                    if i['source'] != _source:
+                        # that's not the main source, so we must check sumtings
+                        cond = False
+                        for ___ in source:
+                            if list(___.keys())[0] == i['source']:
+                                if list(___.values())[0]/list(source[0].values())[0] > random.uniform(0, 1):
+                                    # If that's not the main source of the EP, then it must check the score of the
+                                    # score: if it's higher than the score of its main source, then ok, if not, then
+                                    # we must run a random uniform with the ratio as threshold
+                                    cond = True
+                                    # print('condi', list(___.values())[0], list(source[0].values())[0])
+                    else:
+                        cond = True
+
+                    if cond is True and NPV >= 0 and (NPV > _TP['NPV'] or
+                                                      random.uniform(0, 1) < config.INITIAL_RANDOMNESS):
                         _TP.update({
-                            'TP': _,
+                            'TP': i['name'],
                             'NPV': NPV,
                             'Lumps': Lumps,
                             'CAPEX': i['CAPEX'] * Lumps,
@@ -2039,7 +2157,8 @@ def run_EP(env,
                 CONTRACTS[env.now].update({
                     _: project
                 })
-            elif i['CAPEX'] <= wallet and reinvest is True:
+
+            if i['CAPEX'] <= wallet and reinvest is True:
                 cash_flow_RISK = 0 if i['auction_contracted'] is True else config.RISKS[_source]
                 try:
                     source_price = max(
@@ -2104,7 +2223,7 @@ def run_EP(env,
         #                                                               #
         #################################################################
         if env.now > 0 and env.now % periodicity == 0:
-            add_source = source_reporting_FF(name, _past_weight, index)
+            add_source = source_reporting_FF(name, _past_weight)  # , index)
             for entry in range(len(source) - 1):
                 source[entry][list(source[entry].keys())[0]] *= (1 - _discount) ** periodicity
 
@@ -2246,7 +2365,7 @@ def run_DD(env,
             M_pendulum *= pendulum_demand
             M_increase = DEMAND[env.now - 1]['M'] * specificities['increase'] + M_pendulum"""
 
-            DEMAND.update({env.now: DEMAND.copy()[env.now - 1] + increase})
+            DEMAND.update({env.now: DEMAND.copy()[env.now - 1] * (1 + increase)})
 
         else:
             DEMAND.update({env.now: DEMAND.copy()[env.now - 1]})
@@ -2270,6 +2389,9 @@ def run_DD(env,
             chosen = []
             # print('full demand is ', demand)
             for plant in possible_projects:
+                """if plant['TP'] in AGENTS[env.now-1]['BNDES']['accepted_tps']:
+                    print('plant', plant['BB'], plant['TP'])"""
+
                 if ('auction_contracted' in plant and plant['auction_contracted'] is True) or demand >= 0:
                     """ if there is still demand to to be supplied, then, the power plant is contracted"""
                     """ if the plant is dispatchable it will always enter """
@@ -2349,14 +2471,18 @@ def run_DD(env,
                     config.RISKS[source] = risk_dict[source]/2
 
 
-            if env.now == config.FUSS_PERIOD - 1:
+            """if env.now == config.FUSS_PERIOD - 1:
                 if demand > 0:
                     print('We failed to provide for the whole system on time by ', str(demand))
                 elif env.now == config.FUSS_PERIOD and demand < 0:
-                    print('We reached the whole system with excess of ', str(-1 * demand))
+                    print('We reached the whole system with excess of ', str(-demand))
                 print('demand was', DEMAND[env.now])
                 DEMAND[env.now] += -1 * demand/(24*30)
-                print('now demand is', DEMAND[env.now])
+                print('now demand is', DEMAND[env.now])"""
+
+        if env.now == config.SIM_TIME - 3:
+            print('supply was', demand)
+
 
         AGENTS[env.now][name] = {
             'name': name,
@@ -2375,7 +2501,7 @@ class Hetero(object):
         self.genre = 'HH'
         self.name = 'HH'
         self.hetero_threshold = hetero_threshold
-        self.randomly = False if config.INITIAL_RANDOMNESS < 1 else True  # just to put more emphasis on the
+        self.randomly = True  # False if config.INITIAL_RANDOMNESS < 1 else True  # just to put more emphasis on the
         # randomness of the random runs
         self.action = env.process(run_HH(self.env,
                                          self.genre,
@@ -2401,6 +2527,7 @@ def run_HH(env,
         #################################################################
 
         list_of_pm = []
+        chchchanges = 0
 
         for _ in AGENTS[env.now]:
             agent = AGENTS[env.now][_]
@@ -2425,7 +2552,6 @@ def run_HH(env,
             list_o_entries = ['source',
                               'disclosed_var',
                               'LSS_thresh',
-                              'past_weight',
                               'disclosed_thresh']
 
             chosen_entries = set()
@@ -2459,6 +2585,7 @@ def run_HH(env,
                     previous = {}
                     if env.now > 0 and ratio > hetero_threshold:
                         ratio -= 1/len(list_o_entries)
+                        chchchanges += 1
 
                         for name in list_of_pm:
                             if entry == 'disclosed_var':
@@ -2518,7 +2645,7 @@ def run_HH(env,
                                 if entry != 'source' and name != who:
                                     agent[name][entry] = agent[who][entry]
                                 elif (entry == 'source' and list(agent[who][entry][0].keys())[0] !=
-                                list(agent[name][entry][0].keys())[0]) and name != who:
+                                      list(agent[name][entry][0].keys())[0]) and name != who:
                                     name[name][entry] = name[who][entry][::-1]
 
                 LSS_guys = []
@@ -2545,11 +2672,9 @@ def run_HH(env,
 
                 # print(AGENTS[env.now][who_else[0]][entry], AGENTS[env.now][who[0]][entry], 'equal?')
 
-                AGENTS[env.now]['DD']['homo'] = True  # Just to say that things were changed
+                #AGENTS[env.now]['DD']['homo'] = chchchanges  # Just to say that things were changed
                 # print(env.now, 'HOMO')
-            else:
-                # Nothing happened
-                AGENTS[env.now]['DD']['homo'] = False
+        AGENTS[env.now]['DD']['homo'] = chchchanges
 
         yield env.timeout(1)
 
@@ -2596,21 +2721,23 @@ def make_ep(env,
         name = 'EP_' + str(uuid.uuid4().hex)
 
     if wallet is None:
-        wallet = random.normalvariate(config.THERMAL['CAPEX'] * int(1500/config.THERMAL['MW']), .1)
+        # wallet = random.normalvariate(config.THERMAL['CAPEX'] * int(1500/config.THERMAL['MW']), .1)
+        wallet = random.uniform(10, 30)*10**6
+        # print(wallet)
     if decision_var is None:
         decision_var = random.uniform(0, 1)
     if current_weight is None:
-        current_weight = [0.25, 0.5, .75]
+        current_weight = [0.25, 0.5, .75, .1, .9]
         random.shuffle(current_weight)
     if past_weight is None:
-        past_weight = [0.25, 0.5, .75]
+        past_weight = [0.25, 0.5, .75, .1, .9]
         random.shuffle(past_weight)
     if memory is None:
         memory = [int(random.uniform(3, 24))]
     if impatience is None:
         impatience = [int(random.uniform(1, 5))]
     if LSS_thresh is None:
-        LSS_thresh = [0.25, 0.5, .75]
+        LSS_thresh = [0.25, 0.5, .75, .1, .9]
         random.shuffle(LSS_thresh)
     if source is None:
         source = [{0: random.uniform(0, 1000)}, {1: random.uniform(0, 500)}, {2: random.uniform(0, 500)}]
@@ -2639,6 +2766,7 @@ def make_ep(env,
               discount=discount,
               past_weight=past_weight,
               current_weight=current_weight)
+
 
 def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_threshold=None, capacity_threshold=None, decision_var=None, cap_conditions=None, impatience=None, past_weight=None, LSS_thresh=None, memory=None, discount=None, strategy=None, starting_tech_age=None):
 
@@ -2684,7 +2812,7 @@ def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_thresho
         strategy = random.sample(['capacity', "innovation"], 2)
 
     if starting_tech_age is None:
-        starting_tech_age = 3 if source == 1 else 1
+        starting_tech_age = 2 if source == 1 else 1
 
     return TP(
         env=env,

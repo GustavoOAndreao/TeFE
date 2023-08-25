@@ -34,7 +34,7 @@ PARAMS = {
         "past_weight": past_weight
     },
     'DBB': {
-        'wallet' : {'mean': 3 * 10 ** 9, 'std': 3 * 10 ** 9, 'max': 5 * 10 ** 9, 'min': 1 * 10 ** 9},
+        'wallet': {'mean': (3 * 10 ** 9), 'std': (3 * 10 ** 9), 'max': (5 * 10 ** 9), 'min': (1 * 10 ** 9)},
         'source': public_source,
         'decision_var': decision_var,
         'instrument': ['finance'],  # ['finance', 'guarantee']
