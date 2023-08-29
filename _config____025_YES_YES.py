@@ -10,6 +10,7 @@ import simpy
 # from __main__ import env
 
 # !pip install simpy #on colab it must be this pip install thing, dunno why
+import config
 
 """
     Name of all the files comes from the name here
@@ -292,6 +293,7 @@ RISKS = {0: 0, 1: 0, 2: 0}
 SIM_TIME = 12 * 20
 FUSS_PERIOD = int(SIM_TIME * 0.3)
 SIM_TIME += FUSS_PERIOD
+SIM_TIME += config.buffer_period
 INITIAL_RANDOMNESS = 0.1
 RANDOMNESS = INITIAL_RANDOMNESS
 TP_THERMAL_PROD_CAP_PCT = 0.5

@@ -1883,7 +1883,7 @@ def run_EP(env,
 
                 if i['retirement'] <= env.now:
                     i['status'] = 'retired'
-                    print(_, 'was retired')
+                    # print(_, 'was retired')
 
                 """ 3) and we check if plants finished building """
 
@@ -2011,7 +2011,7 @@ def run_EP(env,
 
             mix_expansion = (remain + self_expansion * (1-cash_flow_RISK))  # / EP_NUMBER ** math.e ** (1-value)
 
-            print(env.now, '_source', _source, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion, (1-cash_flow_RISK))
+          # env.now, '_source', _source, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion, (1-cash_flow_RISK))
 
             # print(mix_expansion)
             # ic(mix_expansion,remain/ EP_NUMBER ** math.e ** (1-value), self_expansion/ EP_NUMBER ** math.e ** (1-value), value, _source) #  if env.now> config.FUSS_PERIOD else None
@@ -2131,14 +2131,15 @@ def run_EP(env,
                                     cond = True
                                     # print('condi', list(___.values())[0], list(source[0].values())[0])
                                     # print('ratio', (ratio ** -1) ** _impatience)
-                                    if (ratio ** -1) ** _impatience > random.uniform(0, 1):
-                                        for attempt in range(0, _impatience):
+                                    if (1 - _past_weight) > random.uniform(0, 1):
+                                        # (max(ratio, 0.1 * 10 ** 25) ** -1) * (1 - _past_weight) < random.uniform(0, 1):
+                                        for attempt in range(0, int(_impatience * (1 - _past_weight))):
                                             random.shuffle(source)
                                             if list(source[0].keys())[0] == i['source']:
                                                 # print('redux')
                                                 break
                                     else:
-                                        impatience[0] = impatience[0]-1 if impatience[0]-1 > 0 else AGENTS[0][name][impatience[0]]
+                                        impatience[0] = impatience[0]+1  # if impatience[0]-1 > 0 else AGENTS[0][name][impatience[0]]
 
                     else:
                         cond = True
@@ -2170,7 +2171,7 @@ def run_EP(env,
                     'old_OPEX': TECHNOLOGIC[env.now - 1][_TP['TP']]['OPEX'],
                     'CAPEX': _TP['CAPEX'],
                     'OPEX': _TP['OPEX'],
-                    'status': 'project',
+                    'status': 'bidded' if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES else 'project',
                     'capacity': _TP['Lumps'] * project['MW'],
                     'MWh': _TP['Lumps'] * project['MW'] * 24 * 30 * project['CF'],
                     'avoided_emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['avoided_emissions'] * _TP['Lumps'],
@@ -2179,20 +2180,21 @@ def run_EP(env,
                     'npv': _TP['NPV'],
                     'price': _TP['price']
                 })
-                if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
-                    # print('sending to EPM for auction')
+                if _TP['source_of_TP'] not in AUCTION_WANTED_SOURCES:
+                    project['auction_contracted'] = False
+                    """# print('sending to EPM for auction')
 
-                    """if config.MARGIN < 1:
+                    if config.MARGIN < 1:
                         _margin = 1 + max(config.MARGIN, (1-value))
                     else:
-                        _margin = 1 + config.MARGIN - value"""
+                        _margin = 1 + config.MARGIN - value
 
                     project.update(
                         {'status': 'bidded',
                          'receiver': 'EPM'})
                 else:
-                    project['status'] = 'project'
-                    project['auction_contracted'] = False
+                    project['status'] = 'project'"""
+                    # project['auction_contracted'] = False
                 # print(_TP['source_of_TP'], AUCTION_WANTED_SOURCES, _TP['source_of_TP'] in AUCTION_WANTED_SOURCES)
                 code = uuid.uuid4().int
                 project['code'] = code
@@ -2529,6 +2531,7 @@ def run_DD(env,
             _MWhs = []
             for _ in MIX[env.now]:
                 i = MIX[env.now][_]
+                _price = round(price, 3)
                 if i['status'] == 'contracted':
                     """ if the plant is auction contracted, then we do not mess with its price"""
                     if 'auction_contracted' in i and i['auction_contracted'] is True:
@@ -2539,7 +2542,6 @@ def run_DD(env,
                             'price': i['auction_price']})
                         # print(i['auction_price'])
                     else:
-                        _price = round(price, 3)
                         MIX[env.now][i['code']].update({
                             'price': _price})
                         # print(price, ' normal_price')
@@ -2563,13 +2565,13 @@ def run_DD(env,
                     risk_dict[source] = max_percentage - risk_dict[source]
                     config.RISKS[source] = risk_dict[source]
                 config.RISKS[source] = risk_dict[source]
-                print(config.RISKS)
+                # print(config.RISKS)
 
             elif risk == 'source':
                 for source in risk_dict:
-                    print('RISK', finding_FF(
+                    """print('RISK', finding_FF(
                         MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'],  max(
-                        finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25))
+                        finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25))"""
                     risky = finding_FF(
                         MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'] / max(
                         finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25)
@@ -2586,12 +2588,12 @@ def run_DD(env,
                     else:
                         min_price = config.STARTING_PRICE/(1+config.MARGIN)
                     config.RISKS[source] = min_price/_price
-                    print(env.now, config.RISKS)
-                    print(_price)
+                    # print(env.now, config.RISKS)
+                    # print(_price)
 
 
             else:
-                print('BLAM')
+                # print('BLAM')
                 total_MWh = sum(Demand_by_source.values())
                 for source in list(risk_dict.keys()):
                     risk_dict[source] = Demand_by_source[source] / total_MWh

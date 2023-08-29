@@ -1310,12 +1310,12 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         else:
             if config.FUSS_PERIOD < env.now or added_mwh > AGENTS[env.now - 1]['DD']['Remaining_demand']:
                 acceptance_cond = k == accepted_source and j['TP'] in accepted_tps and new_new_wallet >= 0  # and car_ratio >= BASEL
-                print(env.now , 'FLAMENGO') if acceptance_cond == True else print(env.now , 'fogão because', k == accepted_source, j['TP'] in accepted_tps, new_new_wallet >= 0)
+                # print(env.now , 'FLAMENGO') if acceptance_cond == True else print(env.now , 'fogão because', k == accepted_source, j['TP'] in accepted_tps, new_new_wallet >= 0)
                 # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond, car_ratio) if acceptance_cond == True else None
             else:
                 # if there is no excess demand, BNDES doesn't finance capacity
                 acceptance_cond = new_new_wallet >= 0  # and car_ratio >= BASEL
-                print(env.now , 'vasquinho') if acceptance_cond == True else print(env.now , 'fluzão')
+                # print(env.now , 'vasquinho') if acceptance_cond == True else print(env.now , 'fluzão')
             # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond)
 
         """if AGENTS[env.now-1]['DD']['Remaining_demand']>0:

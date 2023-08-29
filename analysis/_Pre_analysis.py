@@ -279,7 +279,7 @@ if __name__ == '__main__':
                 print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
                 concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict , path, _format)
             for type_o_dict in ['mix', 'contracts']:
-                print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES' + " (sampling)")
+                print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
                 concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict, path, _format)  # , big_files=True)
 
     duration = 1500  # milliseconds

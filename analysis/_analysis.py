@@ -524,7 +524,7 @@ def _locs(_df, _str, mwh):
                   'green': (_df['status'] == 'contracted') & (_df['source'] != 0),
                   'dirty': (_df['status'] == 'contracted') & (_df['source'] == 0)}
     else:
-        __locs = {'total': (_df['status'] == 'contracted') | (_df['status'] != 'built'),
+        __locs = {'total': (_df['status'] == 'built'),
                   'green': (_df['source'] != 0),
                   'dirty': (_df['source'] == 0)}
 
@@ -638,6 +638,327 @@ if __name__ == '__main__':
             except:
                 None
     print('DONE WITH EM ALL')
+
+    ################################################################
+    #                                                              #
+    #                         Radar Graphs                         #
+    #                                                              #
+    ################################################################
+    radar = False
+    if radar is True:
+        dict_o_lists = {}
+        # list_of_dirs = [x[0].split(".\\") for x in os.walk('.')]
+        # print(list_of_dirs)
+        # list_of_dirs = ['0_YES_YES_YES', "05_YES_YES_YES", "1_YES_YES_YES", "025_YES_YES_YES", "075_YES_YES_YES"]
+
+        list_of_dirs = set()
+
+        for i in list(dfs.keys()):
+            if 'agents' in i:
+                list_of_dirs.add(i)
+
+        print(list_of_dirs)
+        for name in list_of_dirs:
+            agents_df = load_into_df(name + '__normal_agents.csv')
+            mix_df = load_into_df(name + '__normal_mix.csv')
+
+            values_mean = {1: np.mean(np.subtract(list(
+                mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
+                    'avoided_emissions'].sum().groupby(['period'], as_index=False).mean()['avoided_emissions']), list(
+                mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
+                    'emissions'].sum().groupby(['period'], as_index=False).mean()['emissions']))),
+                2: np.mean(list(mix_df.loc[mix_df['source'] != 0].groupby(['period', 'seed'], as_index=False)[
+                                    'capacity'].sum().groupby(['period'], as_index=False).mean()['capacity'])),
+                3: np.mean(list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] != 'contracted')].groupby(
+                    ['period', 'seed'], as_index=False)['MWh'].sum().groupby(['period'], as_index=False).mean()[
+                                    'MWh'])),
+                4: np.mean(agents_df.true_innovation_index),
+                5: np.mean(agents_df.RandD),
+                6: np.mean(agents_df.PCT),
+                7: np.mean((mix_df.loc[mix_df['status'] == 'contracted'].price))}
+            speeds_mean = {}
+
+            values_last = {1: np.subtract(list(
+                mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
+                    'avoided_emissions'].sum().groupby(['period'], as_index=False).mean()['avoided_emissions']), list(
+                mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
+                    'emissions'].sum().groupby(['period'], as_index=False).mean()['emissions']))[-1],
+                           2: list(mix_df.loc[mix_df['source'] != 0].groupby(['period', 'seed'], as_index=False)[
+                                       'capacity'].sum().groupby(['period'], as_index=False).mean()['capacity'])[-1],
+                           3: list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] != 'contracted')].groupby(
+                               ['period', 'seed'], as_index=False)['MWh'].sum().groupby(['period'], as_index=False).mean()[
+                                       'MWh'])[-1],
+                           4: list(agents_df.groupby('period', as_index=False)['true_innovation_index'].mean()[
+                                       'true_innovation_index'])[-1],
+                           5: list(agents_df.groupby('period', as_index=False)['RandD'].mean()['RandD'])[-1],
+                           6: list(agents_df.groupby('period', as_index=False)['PCT'].mean()['PCT'])[-1],
+                           7: list(mix_df.loc[mix_df['status'] == 'contracted'].groupby('period', as_index=False)[
+                                       'price'].mean()[
+                                       'price'])[-1]}
+            speeds_last = {}
+
+            n = 1
+            for x in [np.subtract(list(
+                    mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
+                        'avoided_emissions'].sum().groupby(['period'], as_index=False).mean()['avoided_emissions']), list(
+                    mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
+                        'emissions'].sum().groupby(['period'], as_index=False).mean()['emissions'])),
+                      list(mix_df.loc[mix_df['source'] != 0].groupby(['period', 'seed'], as_index=False)[
+                               'capacity'].sum().groupby(['period'], as_index=False).mean()['capacity']),
+                      list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] != 'contracted')].groupby(
+                          ['period', 'seed'], as_index=False)['MWh'].sum().groupby(['period'], as_index=False).mean()[
+                               'MWh']),
+                      list(agents_df.groupby('period', as_index=False)['true_innovation_index'].mean()[
+                               'true_innovation_index']),
+                      list(agents_df.groupby('period', as_index=False)['RandD'].mean()['RandD']),
+                      list(agents_df.groupby('period', as_index=False)['PCT'].mean()['PCT']),
+                      list(mix_df.loc[mix_df['status'] == 'contracted'].groupby('period', as_index=False)['price'].mean()[
+                               'price'])
+                      ]:
+                speeds_mean[n] = np.nanmean(
+                    [(x[i] - x[i - 12]) / x[i - 12] if x[i - 12] != 0 else np.nan for i in range(12, len(x))])
+
+                speeds_last[n] = (x[-1] - x[0]) / x[0] if x[0] != 0 else (x[-1] - x[12]) / x[12]
+                n += 1
+            dict_o_lists[name] = {"values_mean": values_mean, "speeds_mean": speeds_mean, "values_last": values_last,
+                                  "speeds_last": speeds_last}
+
+        radar_dfs = {}
+        non_normalized = {}
+        for _ in dict_o_lists:
+            radar_dfs[_] = pd.DataFrame.from_dict(dict_o_lists[_])
+            non_normalized[_] = radar_dfs[_].copy()
+
+        for i in range(0, 7):
+            for j in range(0, 4):
+                list_ = []
+                inverse = True if i in [0, 6] else False
+                for name in list_of_dirs:
+                    list_.append(radar_dfs[name].iloc[i, j])
+
+                list_ = normalize(list_, inverse=inverse)
+
+                for name in list_of_dirs:
+                    radar_dfs[name].iloc[i, j] = list_[list_of_dirs.index(name)]
+
+
+        categories = ['emissions', 'capacity', 'generation', 'innovation', 'R&D expenditure', 'PCT', 'price']
+
+        cmap = matplotlib.cm.get_cmap('viridis')
+
+        colors = [cmap(i/(len(list_of_dirs)-1)) for i in range(0, len(list_of_dirs))]
+        print(colors)
+        linecolors = colors.copy()
+
+        markers = ['circle', 'square', 'diamond', 'bowtie', 'hourglass']
+
+        for color in colors:
+            _color = str(color).replace("1.0", "0.65")
+            colors[colors.index(color)] = _color
+
+        for color in linecolors:
+            _color = str(color).replace("1.0", "0.5")
+            linecolors[linecolors.index(color)] = _color
+
+        # fig = go.Figure()
+        n = 5555
+        figtotal = make_subplots(rows=2, cols=2, specs=[[{'type': 'polar'}] * 2] * 2,
+                            subplot_titles=("Mean values",
+                                            "Final values",
+                                            "Mean speeds",
+                                            "Full increase"))
+        for name in list_of_dirs:
+
+            fig = make_subplots(rows=2, cols=2, specs=[[{'type': 'polar'}] * 2] * 2,
+                                subplot_titles=("Mean values",
+                                                "Final values",
+                                                "Mean speeds",
+                                                "Full increase"))
+
+            fig.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].values_mean),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=1,
+                col=1,
+            )
+
+            fig.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].speeds_mean),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=1,
+                col=2,
+            )
+
+            fig.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].values_last),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=2,
+                col=1,
+            )
+
+            fig.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].speeds_last),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=2,
+                col=2,
+            )
+
+            figtotal.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].values_mean),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+
+            ),
+                row=1,
+                col=1,
+            )
+
+            figtotal.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].speeds_mean),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=1,
+                col=2,
+            )
+
+            figtotal.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].values_last),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=2,
+                col=1,
+            )
+
+            figtotal.add_trace(go.Scatterpolar(
+                r=list(radar_dfs[name].speeds_last),
+                theta=categories,
+                fill='toself',
+                name=names[name].split(' - ')[0],
+                fillcolor='rgba' + colors[list_of_dirs.index(name)],
+                line=dict(color='rgba' + linecolors[list_of_dirs.index(name)]),
+                marker=dict(symbol=markers[list_of_dirs.index(name)]),
+            ),
+                row=2,
+                col=2,
+            )
+
+            title = names[name].split('- ')[0] + 'Comparison between cases (normalized values)'
+
+            fig.update_polars(radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            ), row=1, col=1)
+
+            fig.update_polars(radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            ), row=1, col=2)
+
+            fig.update_polars(radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            ), row=2, col=1)
+
+            fig.update_polars(radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            ), row=2, col=2)
+
+            fig.update_layout(
+                title=title,
+                barmode='overlay',
+                template="simple_white",
+                autosize=False,
+                font_family="Times New Roman",
+                font=dict(size=10))
+
+            fig.update_annotations(yshift=20)
+
+            # fig.show()
+            file_name = str(n) + ' ' + title + ".html"
+            pathfile = 'Figures/'
+            fig.write_html(pathfile + file_name)
+            n += 1
+            print(file_name, 'DONE')
+            non_normalized[name].insert(0, "categories", categories, True)
+            non_normalized[name].to_csv(file_name.split(' (')[0] + '.csv', index=False)
+
+        title = 'Comparison between cases (normalized values)'
+
+        figtotal.update_polars(radialaxis=dict(
+            visible=True,
+            range=[0, 1]
+        ), row=1, col=1)
+
+        figtotal.update_polars(radialaxis=dict(
+            visible=True,
+            range=[0, 1]
+        ), row=1, col=2)
+
+        figtotal.update_polars(radialaxis=dict(
+            visible=True,
+            range=[0, 1]
+        ), row=2, col=1)
+
+        figtotal.update_polars(radialaxis=dict(
+            visible=True,
+            range=[0, 1]
+        ), row=2, col=2)
+
+        figtotal.update_layout(
+            title=title,
+            barmode='overlay',
+            template="simple_white",
+            autosize=False,
+            font_family="Times New Roman",
+            font=dict(size=10))
+
+        figtotal.update_annotations(yshift=20)
+
+        # fig.show()
+        file_name = str(n) + ' ' + title + ".html"
+        pathfile = 'Figures/'
+        figtotal.write_html(pathfile + file_name)
+
+        print('DONE WITH RADAR GRAPH')
 
     # print(dfs)
 
@@ -773,7 +1094,7 @@ if __name__ == '__main__':
                                  mode=wind_median['mode'],
                                  line=wind_median['line']))
 
-        fig.update_yaxes(type="log")
+        # fig.update_yaxes(type="log")
 
         fig.update_layout(
             title=names[pre_title.split('__')[0]] + 'Electricity generation ',
@@ -833,7 +1154,7 @@ if __name__ == '__main__':
                                  mode=renewable_median['mode'],
                                  line=renewable_median['line']))
 
-        fig.update_yaxes(type="log")
+        # fig.update_yaxes(type="log")
 
         fig.update_layout(
             title=names[pre_title.split('__')[0]] + 'Electricity generation (aggregated)',
@@ -957,7 +1278,7 @@ if __name__ == '__main__':
                                  mode=wind_median['mode'],
                                  line=wind_median['line']))
 
-        fig.update_yaxes(type="log")
+        # fig.update_yaxes(type="log")
 
         fig.update_layout(
             title=names[pre_title.split('__')[0]] + 'Electric capacity',
@@ -1017,7 +1338,7 @@ if __name__ == '__main__':
                                  mode=Renewable_median['mode'],
                                  line=Renewable_median['line']))
 
-        fig.update_yaxes(type="log")
+        # fig.update_yaxes(type="log")
 
         fig.update_layout(
             title=names[pre_title.split('__')[0]] + 'Electric capacity',
