@@ -31,7 +31,10 @@ def interesting_FF(value=random.uniform(0,1), max_r=0.011, min_r=0.005, below_mi
     return interest
 
 
-def normalize(_list):
+def normalize(_list, inverse=False):
+
+    if inverse is True:
+        _list = [-elem for elem in _list]
 
     _list = np.array(_list)
 
@@ -341,7 +344,8 @@ def private_reporting_FF(genre):
         source = technology['source']
         max_price = max(
             finding_FF(MIX.get(env.now - 1), 'price', 'highest', {'source': source})['value'],
-            finding_FF(MIX.get(env.now - 1), 'price', 'highest')['value']
+            finding_FF(MIX.get(env.now - 1), 'price', 'highest')['value'],
+            AGENTS[env.now-1]['DD']['Price']
         )
         # max_price = finding_FF(TECHNOLOGIC.get(env.now - 1), 'MW', 'highest', {'EorM': EorM})[
         # 'value'] if max_price == 0 else max_price  # if there is no contracted capacity of the source, we attempt to
@@ -1196,7 +1200,7 @@ def capital_adequacy_rationing_FF(receivables_dict, wallet):
 
 
 def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
-                 guaranteeing=False, accepted_source=None, accepted_tps=None):
+                 guaranteeing=False, accepted_source=None, accepted_tps=None, added_mwh=0):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, BASEL, AMMORT, NPV_THRESHOLD, NPV_THRESHOLD_DBB, INSTRUMENT_TO_SOURCE_DICT, RISKS, TP_THERMAL_PROD_CAP_PCT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.BASEL, config.AMMORT, config.NPV_THRESHOLD, config.NPV_THRESHOLD_DBB, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.TP_THERMAL_PROD_CAP_PCT, config.env
 
     global new_wallet
@@ -1208,11 +1212,20 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
     adressed_projects = {}
     adressed_projects_NPVs = []
-    source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
+    """source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)
     max_price = max(source_price.values())
     for source in list(source_price.keys()):
         if source_price[source] == 0:
-            source_price[source] = max_price
+            source_price[source] = max_price"""
+
+    """if len(MIX[env.now - 1]) == 0:
+        _source_price = config.STARTING_PRICE
+    else:
+        _source_price = AGENTS[env.now - 1]['DD']["Price"]
+
+    source_price = {}
+    for elem in [0, 1, 2]:
+        source_price[elem] = _source_price"""
 
     # print('prices at time', env.now, source_price)
 
@@ -1226,6 +1239,17 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
             such source"""
 
             if i.get('receiver') == name and i.get('status') == 'project':
+                # print(config.AUCTION_WANTED_SOURCES)
+                """if 'EPM' in AGENTS[env.now - 1] and i['source'] in config.AUCTION_WANTED_SOURCES:
+                    try:
+                        source_price[i['source']] = max(
+                            weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
+                            weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']],
+                            source_price[i['source']])
+                    except:
+                        source_price[i['source']] = max(weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
+                                                        source_price[i['source']])"""
+                    # print('auction', source_price[i['source']])
 
                 if genre == 'BB':
                     interest_r = r * (1 + value)
@@ -1243,24 +1267,28 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                 else:
                     financing_risk = 0
                 cash_flow_risk = 0 if i['auction_contracted'] == True else config.RISKS[i['source']]
-                if i['auction_contracted'] == True:
+                # print('source', i['source'], source_price)
+                # print(i)
+                """if i['auction_contracted'] == True:
                     price = max(i['auction_price'], source_price[i['source']])
                 else:
-                    price = source_price[i['source']]
+                    price = source_price[i['source']]"""
+                # print("price", price)
                 NPV = npv_generating_FF(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
-                                        i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
+                                        i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), i['price'], i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, true_capex_and_opex=True)
                 # print('at', env.now, 'project from', i.get('receiver'), i.get('TP'), 'has this NPV', NPV)
                 """ic(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, True, NPV, i['source'])"""
-                adressed_projects_NPVs.append({'code': _, 'NPV': NPV, 'capex': i['CAPEX']})
+                adressed_projects_NPVs.append({'code': _, 'NPV': NPV, 'capex': i['CAPEX'], "r": interest_r})
                 adressed_projects.update({_: i.copy()})
         if genre == 'BB':
             adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['NPV'], reverse=True)
         else:
             adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['capex'])
 
+    # added_mwh = 0
     for project in adressed_projects_NPVs:
         i = project.get('code')
         j = adressed_projects.get(i)
@@ -1269,7 +1297,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
 
         new_new_wallet = new_wallet - j.get('CAPEX')
         receiv_value = new_receivables.get(k) + j.get('CAPEX') * (
-                interest_r ** j.get('building_time')) if guaranteeing is False else new_receivables.get(k)
+                project['r'] ** j.get('building_time')) if guaranteeing is False else new_receivables.get(k)
         new_new_receivables = new_receivables.copy()
         new_new_receivables.update({k: receiv_value})
         car_ratio = capital_adequacy_rationing_FF(new_new_receivables, new_new_wallet)
@@ -1280,7 +1308,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         if genre == 'BB':
             acceptance_cond = RISKS[k] < value and npv > NPV_THRESHOLD and new_new_wallet >= 0
         else:
-            if config.FUSS_PERIOD < env.now or AGENTS[env.now - 1]['DD']['Remaining_demand'] < 0:
+            if config.FUSS_PERIOD < env.now or added_mwh > AGENTS[env.now - 1]['DD']['Remaining_demand']:
                 acceptance_cond = k == accepted_source and j['TP'] in accepted_tps and new_new_wallet >= 0  # and car_ratio >= BASEL
                 print(env.now , 'FLAMENGO') if acceptance_cond == True else print(env.now , 'fogão because', k == accepted_source, j['TP'] in accepted_tps, new_new_wallet >= 0)
                 # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond, car_ratio) if acceptance_cond == True else None
@@ -1297,6 +1325,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         # print(name, acceptance_cond, new_new_wallet >= 0, car_ratio >= BASEL)
         # print(acceptance_cond is True and new_new_wallet >= 0 and car_ratio >= BASEL)
         if acceptance_cond == True:  # and car_ratio >= BASEL:
+            added_mwh += j.get('capacity') * 24 * 30 * j.get('CF') * j['Lumps']
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
             # print("new contract", j)
@@ -1341,7 +1370,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
     # print(env.now, my_wallet, new_wallet, 'wallets')
     my_wallet = new_wallet
     my_receivables = new_receivables
-    return {'wallet': my_wallet, 'receivables': my_receivables, 'financing_index': financing_index}
+    return {'wallet': my_wallet, 'receivables': my_receivables, 'financing_index': financing_index, 'added_mwh' : added_mwh}
 
 def bank_sending_FF():
     """

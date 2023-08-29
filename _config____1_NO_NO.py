@@ -284,7 +284,8 @@ NPV_THRESHOLD = 0
 NPV_THRESHOLD_DBB = 0
 INSTRUMENT_TO_SOURCE_DICT = {1: [1], 2: [2], 12: [1, 2], 120: [0, 1, 2]}
 BASEL = 0.105
-MARGIN = 4.5
+# MARGIN = .5
+STARTING_PRICE = 100
 INITIAL_DEMAND = 2.1 * 10 ** 4
 RADICAL_THRESHOLD = 2
 RISKS = {0: 0, 1: 0, 2: 0}
@@ -388,5 +389,4 @@ for j in range(SIM_TIME):
                             }) """
 
 
-STARTING_PRICE = (THERMAL['OPEX'] + (THERMAL['CAPEX'] / THERMAL['lifetime'])
-                                  ) * (1 + MARGIN) / (THERMAL['MW'] * 24 * 30 * THERMAL['CF'])
+MARGIN = STARTING_PRICE * (THERMAL['MW'] * 24 * 30 * THERMAL['CF']) / (THERMAL['OPEX'] + (THERMAL['CAPEX'] / THERMAL['lifetime'])) - 1

@@ -30,6 +30,7 @@ importlib.invalidate_caches()
 # !pip install simpy #on colab it must be this pip install thing, dunno why
 
 doug = 10
+buffer_period = 200
 
 # import _config____1_YES_YES
 # reload(_config____1_YES_YES)

@@ -111,6 +111,7 @@ class TP(object):
         self.prod_cap_pct = [0, 1]
         self.radical = 0
         self.marginal = 0
+        self.min_price = config.STARTING_PRICE
 
         # ic(name, wallet, capacity, Technology, RnD_threshold, capacity_threshold,decision_var, cap_conditions, impatience, past_weight, LSS_thresh, memory, discount,strategy, starting_tech_age)
 
@@ -144,7 +145,8 @@ class TP(object):
             self.starting_tech_age,
             self.prod_cap_pct,
             self.radical,
-            self.marginal
+            self.marginal,
+            self.min_price
         ))
 
 
@@ -177,18 +179,19 @@ def run_TP(name,
            starting_tech_age,
            prod_cap_pct,
            radical,
-           marginal
+           marginal,
+           min_price
 ):
     CONTRACTS, MIX, AGENTS, AGENTS_r, TECHNOLOGIC, TECHNOLOGIC_r, r, AMMORT, rNd_INCREASE, RADICAL_THRESHOLD, env = config.CONTRACTS, config.MIX, config.AGENTS, config.AGENTS_r, config.TECHNOLOGIC, config.TECHNOLOGIC_r, config.r, config.AMMORT, config.rNd_INCREASE, config.RADICAL_THRESHOLD, config.env  # globals
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #     Before anything, we must the current values of each of    #
-        #        the dictionaries that we use and other variables       #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                            Before anything, we must the current values of each of                           #
+        #                               the dictionaries that we use and other variables                              #
+        #                                                                                                             #
+        ###############################################################################################################
 
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
         _memory = memory[0] if env.now == 0 else AGENTS[env.now - 1][name]['memory'][0]
@@ -205,12 +208,12 @@ def run_TP(name,
         # radical = 0
         # marginal = 0
 
-        #################################################################
-        #                                                               #
-        #    First, the Technology provider closes any new deals and    #
-        #                        collect profits                        #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           First, the Technology provider closes any new deals and                           #
+        #                                               collect profits                                               #
+        #                                                                                                             #
+        ###############################################################################################################
 
         dd_profits[Technology['source']] = 0
 
@@ -223,12 +226,12 @@ def run_TP(name,
                     dd_profits[Technology['source']] += i['value']
                     prod_cap_pct[1] += i['value']
 
-        #################################################################
-        #                                                               #
-        #    Now, the Technology provider gets any incentive that is    #
-        #                        available to it                        #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now, the Technology provider gets any incentive that is                           #
+        #                                               available to it                                               #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0:
             for _ in CONTRACTS[env.now - 1]:
@@ -244,32 +247,32 @@ def run_TP(name,
                     else:
                         wallet += incentive
 
-        #################################################################
-        #                                                               #
-        # If it is the end of the year, then the TP shares its profits  #
-        #                     with its shareholders                     #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                        If it is the end of the year, then the TP shares its profits                         #
+        #                                            with its shareholders                                            #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now % 12 == 0 and env.now > 0 and wallet > 0:
             profits_to_shareholders = wallet*(1-value)
             wallet -= profits_to_shareholders
             shareholder_money += profits_to_shareholders
 
-        #################################################################
-        #                                                               #
-        #         The TP then has to 1) adjust the base capex to        #
-        #         the productive capacity (if the technology is         #
-        #  non-transportable; 2) change the strategy if the verdict was #
-        #  to change it; 3) spend the available money into imitation,   #
-        # innovation or productive capacity; 4) check if the TP reached #
-        #     the threshold of innovation/imitation and change the      #
-        #    Technology dictionary if it reached that; 5) update the    #
-        #    global TECHNOLOGY dictionary; and lastly 6) do the self    #
-        #           NPV entry for the AGENTS dictionary later.          #
-        #           8) Oh, it must also the capping process             #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                The TP then has to 1) adjust the base capex to                               #
+        #                                the productive capacity (if the technology is                                #
+        #                         non-transportable; 2) change the strategy if the verdict was                        #
+        #                         to change it; 3) spend the available money into imitation,                          #
+        #                        innovation or productive capacity; 4) check if the TP reached                        #
+        #                            the threshold of innovation/imitation and change the                             #
+        #                           Technology dictionary if it reached that; 5) update the                           #
+        #                           global TECHNOLOGY dictionary; and lastly 6) do the self                           #
+        #                                  NPV entry for the AGENTS dictionary later.                                 #
+        #                                  8) Oh, it must also the capping process                                    #
+        #                                                                                                             #
+        ###############################################################################################################
 
         """ 1)  we have to get the base-CAPEX and adjust it to the productive capacity of the TP (only if its
          technology is not transportable) """
@@ -326,7 +329,7 @@ def run_TP(name,
             tech_age = starting_tech_age + radical # + 0.01 * marginal # + innovation_index * 0.01
             a = np.random.poisson(1 + 1/tech_age) + np.random.normal(0, 1)
             # a = np.random.poisson(1 / tech_age) + np.random.normal(0, 1 - 1/tech_age)
-            print(env.now, 1 / tech_age, name, a, 'radical', radical)
+            # print(env.now, 1 / tech_age, name, a, 'radical', radical)
 
             if a > 1:
                 # print('innovation was', env.now, name, a, RnD_threshold , RandD)  # , RandD > (RnD_threshold))
@@ -371,6 +374,9 @@ def run_TP(name,
 
         """ 8) we must also check if the capping process is on"""
 
+        Technology['min_price'] = (Technology['OPEX'] + (Technology['CAPEX'] / Technology['lifetime'])) / (Technology['MW'] * 24 * 30 * Technology['CF'])
+        # print(Technology['min_price'])
+
         if len(cap_conditions) > 0:
             now = 0
             if len(MIX[env.now - 1]) > 0:
@@ -396,21 +402,23 @@ def run_TP(name,
          (applying any changes if there were any whatsover)"""
         TECHNOLOGIC[env.now].update({name: Technology})
 
-        #################################################################
-        #                                                               #
-        #          And then, the TP will decide what to do next         #
-        #                                                               #
-        #################################################################
+        min_price = Technology['min_price']
+
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                 And then, the TP will decide what to do next                                #
+        #                                                                                                             #
+        ###############################################################################################################
         if env.now > 0:
             decision_var = max(0, min(1, private_deciding_FF(name)))
             decisions = evaluating_FF(name)
             verdict = decisions['verdict']
 
-        #############################################################
-        #                                                           #
-        #  Before leaving, the agent must update the outside world  #
-        #                                                           #
-        #############################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before leaving, the agent must update the outside world                           #
+        #                                                                                                             #
+        ###############################################################################################################
 
         update = {"name": name,
                   "genre": genre,
@@ -441,6 +449,7 @@ def run_TP(name,
                   'PCT': prod_cap_pct[0]/prod_cap_pct[1],
                   "radical": radical,
                   "marginal": marginal,
+                  "self.min_price": min_price
                   }
 
         if env.now > 1:
@@ -540,12 +549,12 @@ def run_TPM(genre,
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #              First, the TPM checks if it got an               #
-        #            strike, adds or changes its main policy            #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                     First, the TPM checks if it got an                                      #
+        #                                   strike, adds or changes its main policy                                   #
+        #                                                                                                             #
+        ###############################################################################################################
 
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
         _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
@@ -560,11 +569,11 @@ def run_TPM(genre,
         wallet = _wallet  # if not env.now % 12 == 0 else 0
         # wallet += AGENTS[0][name]['wallet'] if env.now > 0 and env.now % 12 == 0 else _wallet # the budget is monthly
 
-        #################################################################
-        #                                                               #
-        #             Now, the TPM gives out the incentives             #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                    Now, the TPM gives out the incentives                                    #
+        #                                                                                                             #
+        ###############################################################################################################
 
         policy_pool = [{'instrument': _instrument,
                         'source': _source,
@@ -620,11 +629,11 @@ def run_TPM(genre,
                 source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
-        #################################################################
-        #                                                               #
-        #         And then, the TPM will decide what to do next         #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                And then, the TPM will decide what to do next                                #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0:
             decision_var = max(0, min(1, public_deciding_FF(name)))
@@ -632,11 +641,11 @@ def run_TPM(genre,
             decisions = evaluating_FF(name)
             verdict = decisions['verdict']
 
-        #################################################################
-        #                                                               #
-        #    Before leaving, the agent must uptade the outside world    #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before leaving, the agent must uptade the outside world                           #
+        #                                                                                                             #
+        ###############################################################################################################
 
         update = {
             "genre": genre,
@@ -792,12 +801,12 @@ def run_EPM(genre,
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #              First, the TPM checks if it got an               #
-        #            strike, adds or changes its main policy            #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                     First, the TPM checks if it got an                                      #
+        #                                   strike, adds or changes its main policy                                   #
+        #                                                                                                             #
+        ###############################################################################################################
 
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
@@ -810,11 +819,11 @@ def run_EPM(genre,
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
         value = disclosed_var
 
-        #################################################################
-        #                                                               #
-        #           First, the EPM adds or changes its policy           #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                  First, the EPM adds or changes its policy                                  #
+        #                                                                                                             #
+        ###############################################################################################################
 
         policy_pool = [{'instrument': _instrument,
                         'source': _source,
@@ -983,12 +992,12 @@ def run_EPM(genre,
                                 if j['code'] in contracted_projects:
                                     j.update('bidded' == False)"""
 
-        #################################################################
-        #                                                               #
-        #    Now, the EPM analyses what happened to the system due to   #
-        #                       its intervention                        #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now, the EPM analyses what happened to the system due to                          #
+        #                                              its intervention                                               #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 2:
             add_source = source_reporting_FF(name, _past_weight)
@@ -996,11 +1005,11 @@ def run_EPM(genre,
                 source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
-        #################################################################
-        #                                                               #
-        #         And then, the EPM will decide what to do next         #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                And then, the EPM will decide what to do next                                #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0:
             decision_var = max(0, min(1, public_deciding_FF(name)))
@@ -1008,11 +1017,11 @@ def run_EPM(genre,
             decisions = evaluating_FF(name)
             verdict = decisions['verdict']
 
-        #################################################################
-        #                                                               #
-        #    Before leaving, the agent must uptade the outside world    #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before leaving, the agent must uptade the outside world                           #
+        #                                                                                                             #
+        ###############################################################################################################
 
         update = {
             "genre": genre,
@@ -1112,6 +1121,7 @@ class DBB(object):
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
+        self.added_mwh = 0
 
         self.action = env.process(run_DBB(
             self.NPV_THRESHOLD_DBB,
@@ -1137,7 +1147,8 @@ class DBB(object):
             self.car_ratio,
             self.strikables_dict,
             self.LSS_tot,
-            self.accepted_tps))
+            self.accepted_tps,
+            self.added_mwh))
 
 
 def run_DBB(NPV_THRESHOLD_DBB,
@@ -1163,19 +1174,20 @@ def run_DBB(NPV_THRESHOLD_DBB,
             car_ratio,
             strikables_dict,
             LSS_tot,
-            accepted_tps):
+            accepted_tps,
+            added_mwh):
 
     global decisions
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.AGENTS_r, config.env  # globals
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #              First, the DBB checks if it got an               #
-        #            strike, adds or changes its main policy            #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                     First, the DBB checks if it got an                                      #
+        #                                   strike, adds or changes its main policy                                   #
+        #                                                                                                             #
+        ###############################################################################################################
 
         _LSS_thresh = LSS_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['LSS_thresh'][0]
         _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
@@ -1191,12 +1203,12 @@ def run_DBB(NPV_THRESHOLD_DBB,
         wallet += AGENTS[0][name]['wallet'] if env.now > 0 and env.now % 12 == 0 else _wallet  # the budget is monthly
         # print(wallet, 'wallet')
 
-        #################################################################
-        #                                                               #
-        #    Before doing anything, the development bank must collect   #
-        #      its  payments and guarantee contracts that need be       #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before doing anything, the development bank must collect                          #
+        #                             its  payments and guarantee contracts that need be                              #
+        #                                                                                                             #
+        ###############################################################################################################
 
         # first, we must update the risk dictionary
 
@@ -1244,11 +1256,11 @@ def run_DBB(NPV_THRESHOLD_DBB,
                         else:
                             guaranteed_contracts.remove(i)
 
-        #################################################################
-        #                                                               #
-        #           First, the DBB adds or changes its policy           #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                  First, the DBB adds or changes its policy                                  #
+        #                                                                                                             #
+        ###############################################################################################################
 
         policy_pool = [{'instrument': _instrument,
                         'source': _source,
@@ -1268,7 +1280,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
 
                 tps = []
                 tp_value = []
-                accepted_tps = []  # if env.now % 24 == 0 else list(set(accepted_tps))
+                accepted_tps = [] if env.now % 24 == 0 else list(set(accepted_tps))
                 for _ in AGENTS[env.now]:
 
                     tp = AGENTS[env.now][_]
@@ -1289,7 +1301,10 @@ def run_DBB(NPV_THRESHOLD_DBB,
                             tp_value.append(tpupdate)
 
                 tps.sort(key=lambda x: list(x.values())[0], reverse=True)
-                thresh = np.quantile(tp_value, (env.now/config.SIM_TIME))
+                try:
+                    thresh = np.quantile(tp_value, (1-value)) # (env.now/config.SIM_TIME))
+                except:
+                    thresh = 10 ** 100
 
                 for tp in tps:
                     if list(tp.values())[0] >= thresh:
@@ -1301,10 +1316,12 @@ def run_DBB(NPV_THRESHOLD_DBB,
                     # print('DBB is trying to finance')
 
                     financing = financing_FF(genre, name, wallet, receivable, entry_value, financing_index,
-                                             accepted_source=entry_chosen_source, accepted_tps=accepted_tps)
+                                             accepted_source=entry_chosen_source, accepted_tps=accepted_tps,
+                                             added_mwh=added_mwh)
 
                     wallet = financing['wallet']
                     receivable = financing['receivables']
+                    added_mwh += financing['added_mwh']
 
                 elif entry_instrument == 'guarantee':
                     """ We are dealing with guarantees """
@@ -1316,14 +1333,16 @@ def run_DBB(NPV_THRESHOLD_DBB,
                     receivable = financing['receivables']
                     financing_index = financing['financing_index']
 
+
         # print('DBB wallet' , wallet)
         # _wallet += wallet # all non-used budget is kept for next month
-        #################################################################
-        #                                                               #
-        #    Now, the DBB analyses what happened to the system due to   #
-        #                       its intervention                        #
-        #                                                               #
-        #################################################################
+        
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now, the DBB analyses what happened to the system due to                          #
+        #                                              its intervention                                               #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 2:
             add_source = source_reporting_FF(name, _past_weight)
@@ -1331,11 +1350,11 @@ def run_DBB(NPV_THRESHOLD_DBB,
                 source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
-        #################################################################
-        #                                                               #
-        #         And then, the DBB will decide what to do next         #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                And then, the DBB will decide what to do next                                #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0:
             decision_var = max(0, min(1, public_deciding_FF(name)))
@@ -1344,11 +1363,11 @@ def run_DBB(NPV_THRESHOLD_DBB,
             verdict = decisions['verdict']
             # print('strikes are', decisions['strikes'])
 
-        #################################################################
-        #                                                               #
-        #    Before leaving, the agent must uptade the outside world    #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before leaving, the agent must uptade the outside world                           #
+        #                                                                                                             #
+        ###############################################################################################################
 
         update = {
             "NPV_THRESHOLD_DBB": NPV_THRESHOLD_DBB,
@@ -1466,12 +1485,12 @@ def run_BB(NPV_THRESHOLD_DBB,
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #     Before anything, we must the current values of each of    #
-        #        the dictionaries that we use and other variables       #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                            Before anything, we must the current values of each of                           #
+        #                               the dictionaries that we use and other variables                              #
+        #                                                                                                             #
+        ###############################################################################################################
 
         list_of_strikables = [dd_kappas, dd_qual_vars, dd_backwardness, dd_avg_time, dd_discount, dd_strategies]
 
@@ -1484,11 +1503,11 @@ def run_BB(NPV_THRESHOLD_DBB,
         value = decision_var
         profits = 0  # in order to get the profits of this period alone
 
-        #################################################################
-        #                                                               #
-        #                First, the bank collect profits                #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                       First, the bank collect profits                                       #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0:
             for _ in CONTRACTS[env.now - 1]:
@@ -1503,23 +1522,23 @@ def run_BB(NPV_THRESHOLD_DBB,
                         i['source']: dd_profits[i['source']] - i['value']
                     })
 
-        #################################################################
-        #                                                               #
-        # If it is the end of the year, then the BB shares its profits  #
-        #                     with its shareholders                     #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                        If it is the end of the year, then the BB shares its profits                         #
+        #                                            with its shareholders                                            #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now % 12 == 0 and env.now > 0 and wallet > 0:
             profits_to_shareholders = wallet * (1 - value)
             wallet -= profits_to_shareholders
             shareholder_money += profits_to_shareholders
 
-        #################################################################
-        #                                                               #
-        #    Now, on to check if change is on and if there is a strike  #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now, on to check if change is on and if there is a strike                         #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0 and (verdict == 'add' or 'change'):
             striked = striking_FF(list_of_strikables, kappa)
@@ -1531,11 +1550,11 @@ def run_BB(NPV_THRESHOLD_DBB,
                     source_accepting_FF(accepted_sources, source)
             verdict = 'keep'  # we already changed, now back to business
 
-        #################################################################
-        #                                                               #
-        #        Then, the bank decides which projects to accept        #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                               Then, the bank decides which projects to accept                               #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0 and len(CONTRACTS[env.now - 1]) > 0:
             financing = financing_FF(genre, name, wallet, receivable, value, financing_index)
@@ -1544,12 +1563,12 @@ def run_BB(NPV_THRESHOLD_DBB,
             receivable = financing['receivables']
             financing_index = financing['financing_index']
 
-        #################################################################
-        #                                                               #
-        #    Now, the BB analyses what happened to the system due to    #
-        #                       its intervention                        #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now, the BB analyses what happened to the system due to                           #
+        #                                              its intervention                                               #
+        #                                                                                                             #
+        ###############################################################################################################
 
         add_source = source_reporting_FF(name)
 
@@ -1557,21 +1576,21 @@ def run_BB(NPV_THRESHOLD_DBB,
             dd_source['ranks'][entry] *= (1 - discount)
             dd_source['ranks'][entry] += add_source[entry]
 
-        #################################################################
-        #                                                               #
-        #          And then, the BB will decide what to do next         #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                 And then, the BB will decide what to do next                                #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0:
             decision_var = max(0, min(1, private_deciding_FF(name)))
             decisions = evaluating_FF(name)
 
-        #################################################################
-        #                                                               #
-        #    Before leaving, the agent must uptade the outside world    #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before leaving, the agent must uptade the outside world                           #
+        #                                                                                                             #
+        ###############################################################################################################
 
         AGENTS[env.now].update({name: {
             "financing_index": financing_index,
@@ -1729,12 +1748,12 @@ def run_EP(env,
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #     Before anything, we must the current values of each of    #
-        #        the dictionaries that we use and other variables       #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                            Before anything, we must the current values of each of                           #
+        #                               the dictionaries that we use and other variables                              #
+        #                                                                                                             #
+        ###############################################################################################################
 
         """if env.now == config.FUSS_PERIOD:
             strikables_dict['source'] = source
@@ -1756,11 +1775,11 @@ def run_EP(env,
         profits = 0  # in order to get the profits of this period alone
         dd_profits = {0: 0, 1: 0, 2: 0}
 
-        #############################################################
-        #                                                           #
-        #                    Collecting profits                     #
-        #                                                           #
-        #############################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                             Collecting profits                                              #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0 and len(MIX[env.now - 1]) > 0:
             """ The EP only collects profits if it produces energy and that can only happen if we are not in the start of the simulation, and if the MIX is not empty"""
@@ -1771,11 +1790,11 @@ def run_EP(env,
                 i = MIX[env.now - 1][_].copy()
                 if i['EP'] == name:
 
-                    addition = -1*i['OPEX']  # all plants have operating costs
+                    addition = -i['OPEX']  # * 0.5
 
                     if i['status'] == 'contracted':
                         """ if the plant is mine and it is contracted, I'll collect profits """
-                        addition += i['MWh'] * i['price']
+                        addition = i['MWh'] * i['price']
 
                         """ we also have to put the profit as a contract in the CONTRACTS dictionary in order for the 
                         policy makers, other EPs and the demand to do some calculations """
@@ -1789,10 +1808,12 @@ def run_EP(env,
                             'sender': 'DD',
                             'source': j['source'],
                             'receiver': name,
-                            'value': j['MWh'] * j['price']
+                            'value': j['MWh'] * j['price']  # - i['OPEX'] * 0.5  # all plants have operating costs
                         })
                         """ and now we update"""
                         CONTRACTS[env.now - 1][code] = j
+                    """else:
+                        addition = -0.5 * i['OPEX']  # all plants have operating costs"""
 
                     wallet += addition
                     profits += addition
@@ -1801,26 +1822,28 @@ def run_EP(env,
                         print(i)"""
                     dd_profits[i['source']] += addition
 
-        #################################################################
-        #                                                               #
-        # If it is the end of the year, then the EP shares its profits  #
-        #                     with its shareholders                     #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                        If it is the end of the year, then the EP shares its profits                         #
+        #                                            with its shareholders                                            #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now % 12 == 0 and env.now > 0 and wallet > 0:
+            # print('BEFORE', wallet, value)
             profits_to_shareholders = wallet * (1 - value)
             wallet -= profits_to_shareholders
             shareholder_money += profits_to_shareholders
+            # print('after', wallet)
 
-        #############################################################
-        #                                                           #
-        #  Now the EP goes through its portfolio_of_plants in order #
-        #   to 1) pay the banks for the financing, 2) check if      #
-        #     plants finished building, 3) retire old plants and    #
-        #               4) insert plants into the mix               #
-        #                                                           #
-        #############################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now the EP goes through its portfolio_of_plants in order                          #
+        #                            to 1) pay the banks for the financing, 2) check if                               #
+        #                              plants finished building, 3) retire old plants and                             #
+        #                                        4) insert plants into the mix                                        #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if len(portfolio_of_plants) > 0:
             for _ in portfolio_of_plants:
@@ -1871,21 +1894,33 @@ def run_EP(env,
 
                 if i['status'] == 'built':
                     j = i.copy()
-                    _price = (j['OPEX'] + (j['CAPEX'] / j['lifetime'])) * (1 + config.MARGIN - value) / j['MWh']
+
+                    """if config.MARGIN < 1:
+                        _margin = 1 + max(config.MARGIN, (1-value))
+                    else:
+                        _margin = 1 + config.MARGIN - value"""
+
+                    _margin = config.MARGIN ** (1-value)
+
+                    _price = (j['OPEX'] + (j['CAPEX'] / j['lifetime'])) * _margin / j['MWh']
                     j['price'] = 0 if 'auction_price' in j and i['auction_contracted'] is True else _price
-                    if 'auction_contracted' not in j:
+                    if 'auction_contracted' not in j or j['auction_contracted'] == False:
                         j['auction_contracted'] = False
+
+                        """if j['MWh'] * j['price'] < 0.5 * i['OPEX']:
+                            j['status'] = 'not_available'"""
+
                     MIX[env.now][_] = j
 
-        #############################################################
-        #                                                           #
-        #      Now, the EP has to check if projects that were       #
-        #     auction contracted or had guarantees got financed.    #
-        #         If not, they need to be inserted into the         #
-        #      portfolio_of_projects dictionary in order to be      #
-        #       retired each period until the TOLERANCE limit       #
-        #                                                           #
-        #############################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                               Now, the EP has to check if projects that were                                #
+        #                              auction contracted or had guarantees got financed.                             #
+        #                                  If not, they need to be inserted into the                                  #
+        #                               portfolio_of_projects dictionary in order to be                               #
+        #                                retired each period until the TOLERANCE limit                                #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now > 0 and len(CONTRACTS[env.now - 1]) > 0:
             for _ in CONTRACTS[env.now - 1]:
@@ -1953,36 +1988,39 @@ def run_EP(env,
                     # print(_, 'added to the portfolio of projects')
                     portfolio_of_projects.update({_: j})
 
-        #############################################################
-        #                                                           #
-        #   Then, the Energy producer decides how much to invest    #
-        #                                                           #
-        #############################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                            Then, the Energy producer decides how much to invest                             #
+        #                                                                                                             #
+        ###############################################################################################################
         if env.now > 0 and env.now % periodicity == 0:
-
+            # cash_flow_RISK = config.RISKS[_source] if _source not in config.AUCTION_WANTED_SOURCES else 0
+            cash_flow_RISK = config.RISKS[_source] if _source not in config.AUCTION_WANTED_SOURCES else 0
             if value > 0:
                 remain = AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (
-                            24 * 30 * EP_NUMBER ** math.e ** (value))
+                            24 * 30 * EP_NUMBER ** math.e ** (1-value))
+                self_expansion = DEMAND.copy()[env.now - 1] / EP_NUMBER ** math.e ** (1 - value)
             else:
                 remain = 0
-            self_expansion = DEMAND.copy()[env.now-1]  / EP_NUMBER ** math.e ** (1-value)
+                self_expansion = 0
+
+            remain *= value
+            self_expansion *= value
 
             # mix_expansion = random.uniform(5, 100)
 
-            mix_expansion = (remain + self_expansion) # / EP_NUMBER ** math.e ** (1-value)
+            mix_expansion = (remain + self_expansion * (1-cash_flow_RISK))  # / EP_NUMBER ** math.e ** (1-value)
 
-            print(env.now, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion)
+            print(env.now, '_source', _source, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion, (1-cash_flow_RISK))
 
-            if len(MIX[env.now-1]) == 0 and ('BNDES' not in AGENTS[env.now - 1] and config.BB_NUMBER == 0):
-                mix_expansion = TECHNOLOGIC[env.now-1]['TP_thermal']['CAPEX'] / max(1, wallet)
-                # print(mix_expansion)
+            # print(mix_expansion)
             # ic(mix_expansion,remain/ EP_NUMBER ** math.e ** (1-value), self_expansion/ EP_NUMBER ** math.e ** (1-value), value, _source) #  if env.now> config.FUSS_PERIOD else None
             # ic(AGENTS[env.now-1]['DD']['Remaining_demand'], value)
             """if AGENTS[env.now-1]['DD']['Remaining_demand'] > 0:
                 condition = True
             else:
                 condition = value > 0"""
-            condition = True
+            condition = True if value > 0 else False
         else:
             condition = False
             mix_expansion = 0
@@ -2004,40 +2042,57 @@ def run_EP(env,
 
             # print(EP_NUMBER)
             _TP = {'TP': 0,
-                  'NPV': 0,
-                  'Lumps': 0,
-                  'CAPEX': 0,
-                  'OPEX': 0
+                   'NPV': 0,
+                   'Lumps': 0,
+                   'CAPEX': 0,
+                   'OPEX': 0
                   }
             tech = list(TECHNOLOGIC[env.now - 1].copy().values())
             random.shuffle(tech)
 
             for i in tech:
                 if i['source'] == _source or ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES:
-                    try:
-                        source_price = max(
-                            weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
-                            weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']])
-                    except:
-                        # source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']]
-                        source_price = config.STARTING_PRICE
 
                     # print(source_price)
                     # Lumps = min(max(1, np.ceil(mix_expansion / i['MW'])), max_lump[_source])
 
-                    Lumps = min(np.ceil(mix_expansion / i['MW']), max_lump[_source])
+                    Lumps = min(np.ceil(mix_expansion / i['MW']), max_lump[i['source']])
 
-                    if Lumps < 1 and not (('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES):
-                        # we want to contract less than a single lump of investment
-                        print('break stuff')
-                        continue
-                    elif Lumps < 1 and ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES:
-                        Lumps = self_expansion
-                        print('when the levee breaks')
+                    if 'BNDES' not in AGENTS[env.now - 1] and config.BB_NUMBER == 0:
+                        # print('not')
+                        Lumps = min(np.ceil(wallet * value / i['CAPEX']), Lumps)
 
                     # print(Lumps)
+
+                    if Lumps < 1 and not (('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or i['source'] in config.AUCTION_WANTED_SOURCES):
+                        # we want to contract less than a single lump of investment
+                        # print('break stuff')
+                        continue
+                    elif Lumps < 1 and ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or i['source'] in config.AUCTION_WANTED_SOURCES:
+                        Lumps = self_expansion # * (1-cash_flow_RISK)
+                        # print('when the levee breaks')
+
+                    if len(MIX[env.now-1]) == 0:
+                        source_price = config.STARTING_PRICE
+                    else:
+                        if 'EPM' in AGENTS[env.now - 1] and i['source'] in config.AUCTION_WANTED_SOURCES:
+
+                            source_price = max(AGENTS[env.now - 1]['DD']["Price"],
+                                               (i['OPEX'] + (i['CAPEX'] / i['lifetime'])) * config.MARGIN ** (1-value) /
+                                               (Lumps * i['MW'] * 24 * 30 * i['CF']))
+                            """try:
+                                source_price = max(
+                                    AGENTS[env.now - 1]['DD']["Price"],
+                                    weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
+                                    weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']])
+                            except:
+                                source_price = max(
+                                    AGENTS[env.now - 1]['DD']["Price"],
+                                    weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']])"""
+                        else:
+                            source_price = AGENTS[env.now - 1]['DD']["Price"]
+
                     price = source_price
-                    cash_flow_RISK = config.RISKS[_source] if _source not in config.AUCTION_WANTED_SOURCES else 0
                     # ic(config.RISKS)
                     # print(env.now, _source, cash_flow_RISK)
                     try:
@@ -2068,12 +2123,23 @@ def run_EP(env,
                         cond = False
                         for ___ in source:
                             if list(___.keys())[0] == i['source']:
-                                if list(___.values())[0]/list(source[0].values())[0] > random.uniform(0, 1):
+                                ratio = list(___.values())[0]/list(source[0].values())[0]
+                                if ratio > random.uniform(0, 1):
                                     # If that's not the main source of the EP, then it must check the score of the
                                     # score: if it's higher than the score of its main source, then ok, if not, then
                                     # we must run a random uniform with the ratio as threshold
                                     cond = True
                                     # print('condi', list(___.values())[0], list(source[0].values())[0])
+                                    # print('ratio', (ratio ** -1) ** _impatience)
+                                    if (ratio ** -1) ** _impatience > random.uniform(0, 1):
+                                        for attempt in range(0, _impatience):
+                                            random.shuffle(source)
+                                            if list(source[0].keys())[0] == i['source']:
+                                                # print('redux')
+                                                break
+                                    else:
+                                        impatience[0] = impatience[0]-1 if impatience[0]-1 > 0 else AGENTS[0][name][impatience[0]]
+
                     else:
                         cond = True
 
@@ -2085,7 +2151,8 @@ def run_EP(env,
                             'Lumps': Lumps,
                             'CAPEX': i['CAPEX'] * Lumps,
                             'OPEX': i['OPEX'] * Lumps,
-                            'source_of_TP': i['source']
+                            'source_of_TP': i['source'],
+                            'price': price
                         })
 
             # OPEX and CAPEX are in relation to one lump, so in the project we have to change them to account for the
@@ -2109,17 +2176,19 @@ def run_EP(env,
                     'avoided_emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['avoided_emissions'] * _TP['Lumps'],
                     'emissions': TECHNOLOGIC[env.now - 1][_TP['TP']]['emissions'] * _TP['Lumps'],
                     'guarantee': False,
-                    'npv': _TP['NPV']
+                    'npv': _TP['NPV'],
+                    'price': _TP['price']
                 })
                 if _TP['source_of_TP'] in AUCTION_WANTED_SOURCES:
                     # print('sending to EPM for auction')
 
+                    """if config.MARGIN < 1:
+                        _margin = 1 + max(config.MARGIN, (1-value))
+                    else:
+                        _margin = 1 + config.MARGIN - value"""
+
                     project.update(
                         {'status': 'bidded',
-                         'price': round((
-                                          project['OPEX'] + (project['CAPEX'] / project['lifetime'])
-                                  ) * (1 + config.MARGIN - value) / project['MWh'],
-                                        3),
                          'receiver': 'EPM'})
                 else:
                     project['status'] = 'project'
@@ -2148,7 +2217,12 @@ def run_EP(env,
             if 'limit' not in i:
                 i['limit'] = env.now + 1 + _tolerance
 
-            if i['CAPEX'] > wallet:
+            if i['limit'] == env.now and _ not in _to_pop:
+                # print('project ', _, ' has reached its limit time...')
+                _to_pop.append(_)
+                continue
+
+            if i['CAPEX'] > wallet*value:
                 receiver = bank_sending_FF()
                 project = i.copy()
                 project.update({'sender': name,
@@ -2158,15 +2232,36 @@ def run_EP(env,
                     _: project
                 })
 
-            if i['CAPEX'] <= wallet and reinvest is True:
+            elif i['CAPEX'] <= wallet*value and reinvest is True:
+                # print(i['CAPEX'], wallet*value, value, name)
+
+                """if ('BNDES' in AGENTS[env.now - 1] and
+                        i['source'] == list(AGENTS[env.now - 1]['BNDES']['source'][0].keys())[0]):
+                    if random.uniform(0, 1) >= config.INITIAL_RANDOMNESS:
+                        continue"""
+                if i['source'] != _source:
+                    break
+
                 cash_flow_RISK = 0 if i['auction_contracted'] is True else config.RISKS[_source]
-                try:
-                    source_price = max(
-                        weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
-                        weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']])
-                except:
-                    # source_price = weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']]
+
+                if len(MIX[env.now - 1]) == 0:
                     source_price = config.STARTING_PRICE
+                else:
+                    if 'auction_contracted' in i and i['auction_contracted'] is True:
+                        source_price = max(AGENTS[env.now - 1]['DD']["Price"], i['auction_price'])
+                    else:
+                        source_price = AGENTS[env.now - 1]['DD']["Price"]
+                        """try:
+                            source_price = max(
+                                AGENTS[env.now - 1]['DD']["Price"],
+                                weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']],
+                                weighting_FF(env.now - 1, 'auction_price', 'MWh', MIX)[i['source']])
+                        except:
+                            source_price = max(
+                                AGENTS[env.now - 1]['DD']["Price"] ** 0,
+                                weighting_FF(env.now - 1, 'price', 'MWh', MIX)[i['source']])"""
+
+
                 # financing_RISK = 0
                 NPV = npv_generating_FF(
                     r, i['lifetime'], 1, i['MW'], i['building_time'], i['CAPEX'], i['OPEX'], source_price,
@@ -2176,7 +2271,7 @@ def run_EP(env,
                 min_npv = finding_FF(portfolio_of_plants, 'npv', how='lowest')['value']
 
                 if NPV >= random.uniform(min_npv * (1 - value), max_npv * (1 - value)):
-                    # print(name, 'has just reinvested, and this is the status', i['status'])
+                    # print(name, 'has just reinvested in a plant with source ', i['source'], 'and capacity of', i['capacity'], value)
                     wallet -= i['CAPEX']
                     code = _  # uuid.uuid4().int
                     # print(_)
@@ -2208,20 +2303,17 @@ def run_EP(env,
                              }
                     })"""
 
-            if i['limit'] == env.now and _ not in _to_pop:
-                # print('project ', _, ' has reached its limit time...')
-                _to_pop.append(_)
-
         if len(_to_pop) > 0:
             for code in _to_pop:
                 portfolio_of_projects.pop(code)
 
-        #################################################################
-        #                                                               #
-        #    Now, the EP analyses what happened to the system due to    #
-        #                       its intervention                        #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Now, the EP analyses what happened to the system due to                           #
+        #                                              its intervention                                               #
+        #                                                                                                             #
+        ###############################################################################################################
+
         if env.now > 0 and env.now % periodicity == 0:
             add_source = source_reporting_FF(name, _past_weight)  # , index)
             for entry in range(len(source) - 1):
@@ -2229,21 +2321,21 @@ def run_EP(env,
 
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
-        #################################################################
-        #                                                               #
-        #          And then, the EP will decide what to do next         #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                 And then, the EP will decide what to do next                                #
+        #                                                                                                             #
+        ###############################################################################################################
         if env.now > 0:
             decision_var = max(0, min(1, private_deciding_FF(name)))
             decisions = evaluating_FF(name)
             verdict = decisions['verdict']
 
-        #############################################################
-        #                                                           #
-        #  Before leaving, the agent must update the outside world  #
-        #                                                           #
-        #############################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                           Before leaving, the agent must update the outside world                           #
+        #                                                                                                             #
+        ###############################################################################################################
         update = {"name": name,
                   "genre": genre,
                   "wallet": wallet,
@@ -2294,7 +2386,7 @@ class Demand(object):
         self.when = when
         self.increase = increase
         self.Demand_by_source = {0: 0, 1:0, 2:0}
-        self._Price = 0
+        self._Price = config.STARTING_PRICE
         self.action = env.process(run_DD(self.env,
                                          self.genre,
                                          self.name,
@@ -2327,11 +2419,11 @@ def run_DD(env,
         else:
             config.RANDOMNESS = config.INITIAL_RANDOMNESS
 
-        #################################################################
-        #                                                               #
-        #                Which plants will be contracted?               #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                       Which plants will be contracted?                                      #
+        #                                                                                                             #
+        ###############################################################################################################
 
         if env.now == 0:
             DEMAND.update({env.now: initial_demand})
@@ -2372,6 +2464,7 @@ def run_DD(env,
 
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
         demand = DEMAND.copy()[env.now] * 24 * 30
+        price = config.STARTING_PRICE
         if env.now > 0 and len(MIX[env.now]) > 0:
 
             """ 
@@ -2387,12 +2480,14 @@ def run_DD(env,
             # possible_projects = sorted(possible_projects, reverse=True, key=lambda x: x['auction_contracted'])
             # print(possible_projects)
             chosen = []
+            installed_MWh = 0
             # print('full demand is ', demand)
             for plant in possible_projects:
                 """if plant['TP'] in AGENTS[env.now-1]['BNDES']['accepted_tps']:
                     print('plant', plant['BB'], plant['TP'])"""
 
-                if ('auction_contracted' in plant and plant['auction_contracted'] is True) or demand >= 0:
+                if plant['status'] == 'built' and (
+                        ('auction_contracted' in plant and plant['auction_contracted'] is True) or demand >= 0):
                     """ if there is still demand to to be supplied, then, the power plant is contracted"""
                     """ if the plant is dispatchable it will always enter """
                     """ if the plant is auction contracted it will also always enter"""
@@ -2406,50 +2501,75 @@ def run_DD(env,
                         'status': 'built',
                         'price': 0
                     })
+                installed_MWh += plant['MWh']
 
                 demand -= plant['MWh']
                 # print(MIX[env.now][plant['code']], 'was not contracted')
             """ following the merit order, the system is precified in relation to its most costly unit"""
 
-            chosen_plant = sorted(chosen, key=lambda x: x['price'])[-1]
-            """if chosen_plant['auction_contracted'] is False:"""
-            price = (
-                            chosen_plant['OPEX'] + (chosen_plant['CAPEX'] / chosen_plant['lifetime'])
-                    ) * (1 + MARGIN) / chosen_plant['MWh']
-            """else:
-                price = chosen_plant['price']"""
+            chosen_wo_auctions = sorted(chosen, key=lambda x: x['price'])
+            chosen_wo_auctions = [elem for elem in chosen_wo_auctions if elem['auction_contracted'] is not True]
 
-            # print(price) if env.now == 100 else None
+            if len(chosen_wo_auctions) > 0:
+                chosen_plant = chosen_wo_auctions[-1]
+                price = chosen_plant['price']
+                """if chosen_plant['auction_contracted'] is False:"""
+                """price = (
+                                chosen_plant['OPEX'] + (chosen_plant['CAPEX'] / chosen_plant['lifetime'])
+                        ) * (1 + MARGIN) / chosen_plant['MWh']"""
+                """else:
+                    price = chosen_plant['price']"""
 
+                # print(price) if env.now == 100 else None
+            else:
+                price = AGENTS[env.now-1]['DD']['Price']
+                # print(env.now, 'zero price, no thermal contracted')
+
+            _Price_list = []
+            _MWhs = []
             for _ in MIX[env.now]:
                 i = MIX[env.now][_]
                 if i['status'] == 'contracted':
                     """ if the plant is auction contracted, then we do not mess with its price"""
-                    if 'auction_contracted' not in i or i['auction_contracted'] is False:
+                    if 'auction_contracted' in i and i['auction_contracted'] is True:
+                        # _price = max(round(price, 3), i['auction_price'])
+                        """MIX[env.now][i['code']].update({
+                            'price': _price})"""
                         MIX[env.now][i['code']].update({
-                            'price': round(price, 3)})
-                        # print(price, ' normal_price')
-                    elif 'auction_contracted' in i and i['auction_contracted'] is True:
-                        MIX[env.now][i['code']].update({
-                            'price': max(round(price, 3), i['auction_price'])})
+                            'price': i['auction_price']})
                         # print(i['auction_price'])
+                    else:
+                        _price = round(price, 3)
+                        MIX[env.now][i['code']].update({
+                            'price': _price})
+                        # print(price, ' normal_price')
 
-            _Price = weighting_FF(env.now, 'price', 'MWh', MIX) if len(MIX[env.now]) > 0 else config.STARTING_PRICE
+                    _Price_list.append(_price)
+                    _MWhs.append(MIX[env.now][i['code']]['MWh'])
+
+            # _Price = weighting_FF(env.now, 'price', 'MWh', MIX) if len(MIX[env.now]) > 0 else config.STARTING_PRICE
+            _Price = sum([_Price_list[k]*_MWhs[k] for k in range(len(_Price_list)-1)])/sum(_MWhs)
+            # print(env.now, "_Price", _Price, "price", price)
             # ic(env.now, increase, demand, DEMAND[env.now], _Price)
 
             risk_dict = {0: 0, 1: 0, 2: 0}
-            risk = 'source'
+            risk = 'price'
             if risk == 'demand':
-                total_MWh = sum(Demand_by_source.values())
+                total_MWh = installed_MWh  # sum(Demand_by_source.values())
                 for source in list(risk_dict.keys()):
                     risk_dict[source] = Demand_by_source[source] / total_MWh
                 max_percentage = max(list(risk_dict.values()))
                 for source in list(risk_dict.keys()):
                     risk_dict[source] = max_percentage - risk_dict[source]
                     config.RISKS[source] = risk_dict[source]
+                config.RISKS[source] = risk_dict[source]
+                print(config.RISKS)
 
             elif risk == 'source':
                 for source in risk_dict:
+                    print('RISK', finding_FF(
+                        MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'],  max(
+                        finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25))
                     risky = finding_FF(
                         MIX[env.now], 'MWh', 'sum', {'status': 'contracted', 'source': source})['value'] / max(
                         finding_FF(MIX[env.now], 'MWh', 'sum', {'source': source})['value'], 0.1 / 10 ** 25)
@@ -2457,7 +2577,21 @@ def run_DD(env,
                     risk_dict[source] = 1 - risky
                     config.RISKS[source] = risk_dict[source]
                     # print(env.now, source, config.RISKS[source])
+
+            elif risk == 'price':
+                for source in risk_dict:
+                    if source != 0:
+                        min_price = finding_FF(TECHNOLOGIC[env.now - 1], 'min_price', 'lowest', {'source': source})[
+                            'value']
+                    else:
+                        min_price = config.STARTING_PRICE/(1+config.MARGIN)
+                    config.RISKS[source] = min_price/_price
+                    print(env.now, config.RISKS)
+                    print(_price)
+
+
             else:
+                print('BLAM')
                 total_MWh = sum(Demand_by_source.values())
                 for source in list(risk_dict.keys()):
                     risk_dict[source] = Demand_by_source[source] / total_MWh
@@ -2481,8 +2615,9 @@ def run_DD(env,
                 print('now demand is', DEMAND[env.now])"""
 
         if env.now == config.SIM_TIME - 3:
-            print('supply was', demand)
+            print('supply was', DEMAND.copy()[env.now] * 24 * 30 - demand, "with excess of ", -demand, "at a price of", _Price)
 
+        # print(env.now, _Price, price)
 
         AGENTS[env.now][name] = {
             'name': name,
@@ -2490,7 +2625,8 @@ def run_DD(env,
             'Demand': DEMAND.copy()[env.now],
             'Remaining_demand': demand,
             'Demand_by_source': Demand_by_source,
-            'Price': _Price}
+            'Price': price,
+            'Avg_Price': _Price}
 
         yield env.timeout(1)
 
@@ -2520,11 +2656,11 @@ def run_HH(env,
 
     while True:
 
-        #################################################################
-        #                                                               #
-        #                How many public agents are there?              #
-        #                                                               #
-        #################################################################
+        ###############################################################################################################
+        #                                                                                                             #
+        #                                       How many public agents are there?                                     #
+        #                                                                                                             #
+        ###############################################################################################################
 
         list_of_pm = []
         chchchanges = 0
@@ -2539,11 +2675,11 @@ def run_HH(env,
 
             # That means we have more than two policy makers
 
-            #################################################################
-            #                                                               #
-            #                Perform the heterogeneity check                #
-            #                                                               #
-            #################################################################
+            ###########################################################################################################
+            #                                                                                                         #
+            #                                        Perform the heterogeneity check                                  #
+            #                                                                                                         #
+            ###########################################################################################################
 
             # We are saving the results of the homogeneity to the demand object, just to avoid creating a new entry
             # on the agents dictionary
@@ -2578,7 +2714,7 @@ def run_HH(env,
 
             if len(chosen_entries) > 0 and len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
                 # above the threshold and above the heterogeneity test, so we have to homogenize things
-                random.shuffle(chosen_entries) # it must be random which ones go first
+                random.shuffle(chosen_entries)  # it must be random which ones go first
                 ratio = len(chosen_entries)/len(list_o_entries)
                 for entry in chosen_entries:
                     current = {}
@@ -2615,26 +2751,37 @@ def run_HH(env,
                             # If random is True, then it is randomized
                             # If more than one policy maker changed, then it really doesn't matter who follows who
                             # If we have more than one pm, then it's best to keep it randomized
-
                             """
                             It is best to just copy the whole list to avoid destroying entries
                             """
 
                             chosen_agent = random.choice(who)
-                            if entry != 'source':
-                                chosen = agent[chosen_agent][entry]
-
-                                for name in list_of_pm:
-                                    if name != chosen_agent:
-                                        agent[name][entry] = chosen
-                            else:
-                                chosen_source = list(agent[chosen_agent][entry][0].keys())[0]
+                            chosen = agent[chosen_agent][entry]
+                            if entry == 'source':
+                                chosen_source = list(chosen[0].keys())[0]
                                 for name in list_of_pm:
                                     agent_source = list(agent[name][entry][0].keys())[0]
                                     if agent_source != chosen_source and name != chosen_agent:
                                         agent[name][entry] = agent[name][entry][::-1]
                                         # we only two renewable sources, so if it's different, by just inverting it, we
                                         # have what we want
+
+                            else:
+                                if entry == 'disclosed_var':
+                                    max_chosen = 0
+                                    # discloseds = []
+                                    for name in 2*list_of_pm:
+                                        max_chosen = max(max_chosen, agent[name][entry])
+                                        agent[name][entry] = max_chosen
+                                    """for name in list_of_pm:
+                                        discloseds.append(agent[name][entry])
+                                    for name in list_of_pm:
+                                        agent[name][entry] = np.max(discloseds)"""
+                                    # print('homo', env.now, agent[name][entry])
+                                else:
+                                    for name in list_of_pm:
+                                        if name != chosen_agent:
+                                            agent[name][entry] = chosen
 
                         # If it's not random, then we have to change to the least updated one
                         else:
@@ -2679,11 +2826,11 @@ def run_HH(env,
         yield env.timeout(1)
 
 
-#################################################################
-#                                                               #
-#                      CREATION EQUATIONS                       #
-#                                                               #
-#################################################################
+#######################################################################################################################
+#                                                                                                                     #
+#                                             CREATION EQUATIONS                                                      #
+#                                                                                                                     #
+#######################################################################################################################
 
 def make_ep(env,
             name=None,

@@ -1,3 +1,5 @@
+import traceback
+
 import pandas as pd
 import feather
 import numpy as np
@@ -171,13 +173,16 @@ def concat_csvs(json_files, file_type, name, _path, _format, big_files=None):
     for entry in range(0, len(to_search)):
         print(str(entry+1) + ' of ' + str(len(to_search)) + ' is starting at ' + time.strftime("%H:%M:%S", time.localtime()))
         global path_to_json
-        json_file = open(to_search[entry])
-        """d = json.load(json_file)
-        dd = pd.DataFrame.from_dict(d, orient='index')"""
-        data = search_json_for(json.load(json_file), entry)
-        json_file.close()
-        # inter = timeit.default_timer()
-        # print(str(entry) + " is done after " + str(((inter - start) / 60)) + ' minutes')
+        try:
+            json_file = open(to_search[entry])
+            """d = json.load(json_file)
+            dd = pd.DataFrame.from_dict(d, orient='index')"""
+            data = search_json_for(json.load(json_file), entry)
+            json_file.close()
+            # inter = timeit.default_timer()
+            # print(str(entry) + " is done after " + str(((inter - start) / 60)) + ' minutes')
+        except:
+            traceback.print_exc()
 
         df_big_list += data
 
