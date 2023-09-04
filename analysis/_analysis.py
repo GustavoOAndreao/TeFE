@@ -17,7 +17,34 @@ from names import names
 from icecream import ic
 from sklearn.linear_model import LinearRegression
 from plotly.subplots import make_subplots
+# from commons import normalize
 from operator import add
+
+def normalize(_list, inverse=False):
+
+    if inverse is True:
+        _list = [-elem for elem in _list]
+
+    _list = np.array(_list)
+
+    min_var = min(_list)
+    if np.any(_list < 0):
+
+        _list = _list + abs(min_var)
+        min_var = 0
+    # print(min_var)
+    max_var = max(_list)
+
+    denominator = (max_var - min_var) if max_var != min_var else 1
+    # print(_list)
+    _list = _list - min_var
+    # print(_list)
+    _list = _list / denominator
+    # print(_list)
+
+    # _list = [(i - min_var)/denominator for i in _list]
+
+    return _list
 
 
 def load_into_df(_file):
@@ -161,34 +188,6 @@ def simple_graph(name_o_graph, var, dataframe, x_axis, groupby=None, remove_outl
 
     return fig.show() if show is True else None
 
-
-def normalize(_list, inverse=False):
-
-    if inverse is True:
-        _list = [-elem for elem in _list]
-
-    _list = np.array(_list)
-
-    min_var = min(_list)
-    if np.any(_list < 0):
-
-        _list = _list + abs(min_var)
-        min_var = 0
-    # print(min_var)
-    max_var = max(_list)
-
-    denominator = (max_var - min_var) if max_var != min_var else 1
-    # print(_list)
-    _list = _list - min_var
-    # print(_list)
-    _list = _list / denominator
-    # print(_list)
-
-    # _list = [(i - min_var)/denominator for i in _list]
-
-    return _list
-
-
 def simple_add_trace(name_o_var, var, dataframe, x_axis, groupby=None, remove_outliers=True, color=None, _sum=False,
                      base_100=False, _dash=None, _pattern=None):
 
@@ -256,6 +255,7 @@ def scatter_graph(full_x, full_y, speed=False, groupby=None, show=True, time=0, 
         # x[0] = 0
         y = [(y[i] - y[i-time])/y[i-time] if y[i-time] != 0 else 'to_remove' for i in range(time, len(y))]
         # y[0] = 0
+
 
         to_pop = []
         _max = len(x)-1
@@ -505,7 +505,7 @@ def iqr_table(var, dataframe, x_axis, groupby=None, remove_outliers=True, _sum=F
     if remove_outliers is True:
         y_max = []
         y_min = []
-        for i in range(0,len(_y_max)):
+        for i in range(0, len(_y_max)):
             y_max.append(min(max(_y_max[i], y_upper[i], y_median[i], y_bottom[i], _y_min[i]), y_upper[i] + 1.5*(y_upper[i]-y_bottom[i])))
             y_min.append(max(min(_y_max[i], y_upper[i], y_median[i], y_bottom[i], _y_min[i]), y_bottom[i] - 1.5*(y_upper[i]-y_bottom[i])))
     else:
@@ -524,7 +524,7 @@ def _locs(_df, _str, mwh):
                   'green': (_df['status'] == 'contracted') & (_df['source'] != 0),
                   'dirty': (_df['status'] == 'contracted') & (_df['source'] == 0)}
     else:
-        __locs = {'total': (_df['status'] == 'built'),
+        __locs = {'total': (_df['status'] == 'contracted') | (_df['status'] == 'built'),
                   'green': (_df['source'] != 0),
                   'dirty': (_df['source'] == 0)}
 
@@ -591,6 +591,8 @@ def line_generator(var, _df, _groupby, x_axis, _loc=None, _remove_outliers=True,
 
 if __name__ == '__main__':
 
+    radar = True
+    report = False
     """
     Order:
     
@@ -600,6 +602,7 @@ if __name__ == '__main__':
     """
 
     list_of_files = os.listdir('.')
+    print(list_of_files)
     list_of_files.remove('Figures')
 
     dfs_names = {'__mix': {},
@@ -609,7 +612,7 @@ if __name__ == '__main__':
 
     for _file in list_of_files:
         _entry1 = None
-        if os.stat(_file).st_size > 100:
+        if os.stat(_file).st_size > 100: # and _file in ['0_YES_YES_YES', '05_YES_YES_YES', "1_YES_YES_YES"]:  # uncomment to just check specific csvs:
             if '.csv' in _file:
                 if 'mix' in _file:
                     _entry1 = 'mix'
@@ -644,18 +647,26 @@ if __name__ == '__main__':
     #                         Radar Graphs                         #
     #                                                              #
     ################################################################
-    radar = False
+
     if radar is True:
         dict_o_lists = {}
-        # list_of_dirs = [x[0].split(".\\") for x in os.walk('.')]
+
+        for root, dirs, files in os.walk('.'):
+            list_of_dirs = set(dirs)
+            break
+
         # print(list_of_dirs)
         # list_of_dirs = ['0_YES_YES_YES', "05_YES_YES_YES", "1_YES_YES_YES", "025_YES_YES_YES", "075_YES_YES_YES"]
 
-        list_of_dirs = set()
+        # list_of_dirs = set()
 
-        for i in list(dfs.keys()):
+        """for i in list(dfs.keys()):
             if 'agents' in i:
-                list_of_dirs.add(i)
+                list_of_dirs.add(i)"""
+
+        list_of_dirs = list_of_dirs.intersection(set(names.keys()))
+
+        list_of_dirs = [i for i in list_of_dirs]
 
         print(list_of_dirs)
         for name in list_of_dirs:
@@ -667,14 +678,20 @@ if __name__ == '__main__':
                     'avoided_emissions'].sum().groupby(['period'], as_index=False).mean()['avoided_emissions']), list(
                 mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
                     'emissions'].sum().groupby(['period'], as_index=False).mean()['emissions']))),
+
                 2: np.mean(list(mix_df.loc[mix_df['source'] != 0].groupby(['period', 'seed'], as_index=False)[
                                     'capacity'].sum().groupby(['period'], as_index=False).mean()['capacity'])),
-                3: np.mean(list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] != 'contracted')].groupby(
+
+                3: np.mean(list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] == 'contracted')].groupby(
                     ['period', 'seed'], as_index=False)['MWh'].sum().groupby(['period'], as_index=False).mean()[
                                     'MWh'])),
+
                 4: np.mean(agents_df.true_innovation_index),
+
                 5: np.mean(agents_df.RandD),
+
                 6: np.mean(agents_df.PCT),
+
                 7: np.mean((mix_df.loc[mix_df['status'] == 'contracted'].price))}
             speeds_mean = {}
 
@@ -683,15 +700,21 @@ if __name__ == '__main__':
                     'avoided_emissions'].sum().groupby(['period'], as_index=False).mean()['avoided_emissions']), list(
                 mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
                     'emissions'].sum().groupby(['period'], as_index=False).mean()['emissions']))[-1],
+
                            2: list(mix_df.loc[mix_df['source'] != 0].groupby(['period', 'seed'], as_index=False)[
                                        'capacity'].sum().groupby(['period'], as_index=False).mean()['capacity'])[-1],
-                           3: list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] != 'contracted')].groupby(
+
+                           3: list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] == 'contracted')].groupby(
                                ['period', 'seed'], as_index=False)['MWh'].sum().groupby(['period'], as_index=False).mean()[
                                        'MWh'])[-1],
+
                            4: list(agents_df.groupby('period', as_index=False)['true_innovation_index'].mean()[
                                        'true_innovation_index'])[-1],
+
                            5: list(agents_df.groupby('period', as_index=False)['RandD'].mean()['RandD'])[-1],
+
                            6: list(agents_df.groupby('period', as_index=False)['PCT'].mean()['PCT'])[-1],
+
                            7: list(mix_df.loc[mix_df['status'] == 'contracted'].groupby('period', as_index=False)[
                                        'price'].mean()[
                                        'price'])[-1]}
@@ -703,15 +726,21 @@ if __name__ == '__main__':
                         'avoided_emissions'].sum().groupby(['period'], as_index=False).mean()['avoided_emissions']), list(
                     mix_df.loc[mix_df['status'] == 'contracted'].groupby(['period', 'seed'], as_index=False)[
                         'emissions'].sum().groupby(['period'], as_index=False).mean()['emissions'])),
+
                       list(mix_df.loc[mix_df['source'] != 0].groupby(['period', 'seed'], as_index=False)[
                                'capacity'].sum().groupby(['period'], as_index=False).mean()['capacity']),
-                      list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] != 'contracted')].groupby(
+
+                      list(mix_df.loc[(mix_df['source'] != 0) & (mix_df['status'] == 'contracted')].groupby(
                           ['period', 'seed'], as_index=False)['MWh'].sum().groupby(['period'], as_index=False).mean()[
                                'MWh']),
+
                       list(agents_df.groupby('period', as_index=False)['true_innovation_index'].mean()[
                                'true_innovation_index']),
+
                       list(agents_df.groupby('period', as_index=False)['RandD'].mean()['RandD']),
+
                       list(agents_df.groupby('period', as_index=False)['PCT'].mean()['PCT']),
+
                       list(mix_df.loc[mix_df['status'] == 'contracted'].groupby('period', as_index=False)['price'].mean()[
                                'price'])
                       ]:
@@ -741,7 +770,6 @@ if __name__ == '__main__':
                 for name in list_of_dirs:
                     radar_dfs[name].iloc[i, j] = list_[list_of_dirs.index(name)]
 
-
         categories = ['emissions', 'capacity', 'generation', 'innovation', 'R&D expenditure', 'PCT', 'price']
 
         cmap = matplotlib.cm.get_cmap('viridis')
@@ -750,7 +778,7 @@ if __name__ == '__main__':
         print(colors)
         linecolors = colors.copy()
 
-        markers = ['circle', 'square', 'diamond', 'bowtie', 'hourglass']
+        markers = [*range(0, len(list_of_dirs))]
 
         for color in colors:
             _color = str(color).replace("1.0", "0.65")
@@ -921,6 +949,7 @@ if __name__ == '__main__':
             non_normalized[name].insert(0, "categories", categories, True)
             non_normalized[name].to_csv(file_name.split(' (')[0] + '.csv', index=False)
 
+        n = 5999
         title = 'Comparison between cases (normalized values)'
 
         figtotal.update_polars(radialaxis=dict(
@@ -979,7 +1008,7 @@ if __name__ == '__main__':
     for _ in dfs_names:
 
         dfs[_] = load_into_df(dfs_names[_])"""
-    report = True
+
 
     if report is True:
         _sum_vars = ['MWh', 'capacity', 'avoided_emissions']
@@ -1096,7 +1125,7 @@ if __name__ == '__main__':
 
         # fig.update_yaxes(type="log")
 
-        fig.update_layout(
+        fig.update_layout(  # legend=dict(orientation="h"),
             title=names[pre_title.split('__')[0]] + 'Electricity generation ',
             xaxis_title='period (months)',
             yaxis_title='MWh',
@@ -1136,7 +1165,7 @@ if __name__ == '__main__':
 
         renewable_iqr, renewable_max_min, renewable_median = simple_add_trace('Electricity generated by renewable', 'MWh',
                                                                   mix_df.loc[(mix_df['status'] == 'contracted') & (
-                                                                          mix_df['source'] != 2)],
+                                                                          mix_df['source'] != 0)],
                                                                   'period', groupby=None, remove_outliers=True,
                                                                   color='126,232,4',
                                                                   _sum=True, _dash='dashdot')
@@ -1156,7 +1185,7 @@ if __name__ == '__main__':
 
         # fig.update_yaxes(type="log")
 
-        fig.update_layout(
+        fig.update_layout(  # legend=dict(orientation="h"),
             title=names[pre_title.split('__')[0]] + 'Electricity generation (aggregated)',
             xaxis_title='period (months)',
             yaxis_title='MWh',
@@ -1197,7 +1226,7 @@ if __name__ == '__main__':
 
         fig.update_yaxes(type="log")
 
-        fig.update_layout(
+        fig.update_layout(legend=dict(orientation="h"),
             title=names[pre_title.split('__')[0]] + 'Electricity generation (IQR)',
             xaxis_title='period (months)',
             yaxis_title='MWh',
@@ -1260,8 +1289,7 @@ if __name__ == '__main__':
                                  line=solar_median['line']))
 
         wind_iqr, wind_max_min, wind_median = simple_add_trace('Wind capacity', 'capacity',
-                                                               mix_df.loc[(
-                                                                       mix_df['source'] == 1)],
+                                                               mix_df.loc[(mix_df['source'] == 1)],
                                                                'period', groupby=None, remove_outliers=True,
                                                                color='4,126,232', _sum=True)
 
@@ -1280,7 +1308,7 @@ if __name__ == '__main__':
 
         # fig.update_yaxes(type="log")
 
-        fig.update_layout(
+        fig.update_layout(  # legend=dict(orientation="h"),
             title=names[pre_title.split('__')[0]] + 'Electric capacity',
             xaxis_title='period (months)',
             yaxis_title='MW',
@@ -1299,8 +1327,7 @@ if __name__ == '__main__':
         fig = go.Figure()
 
         thermal_iqr, thermal_max_min, thermal_median = simple_add_trace('Thermal capacity', 'capacity',
-                                                                        mix_df.loc[
-                                                                            (
+                                                                        mix_df.loc[(
                                                                                     mix_df['source'] == 0)],
                                                                         'period', groupby=None, remove_outliers=True,
                                                                         color='232,126,4', _sum=True, _dash='solid')
@@ -1340,7 +1367,7 @@ if __name__ == '__main__':
 
         # fig.update_yaxes(type="log")
 
-        fig.update_layout(
+        fig.update_layout(  # legend=dict(orientation="h"),
             title=names[pre_title.split('__')[0]] + 'Electric capacity',
             xaxis_title='period (months)',
             yaxis_title='MW',
@@ -1383,7 +1410,7 @@ if __name__ == '__main__':
 
         fig.update_yaxes(type="log")
 
-        fig.update_layout(
+        fig.update_layout(legend=dict(orientation="h"),
             title=names[pre_title.split('__')[0]] + 'Electric capacity (IQR)',
             xaxis_title='period (months)',
             yaxis_title='MW',
@@ -1526,7 +1553,7 @@ if __name__ == '__main__':
     for i in list(dfs.keys()):
         if 'agents' in i:
             pre_titles.append(i)
-    print(pre_titles)
+    # print(pre_titles)
 
     # pre_titles = ['YES_YES__agents']  # uncomment and put a certain dataframe name to avoid checking all
 
@@ -1552,7 +1579,46 @@ if __name__ == '__main__':
 
     # max_profit = False
     # min_profit = False
+    series_dict = {}
+    times = [1, 3, 6, 12, 24, 48]
     for pre_title in pre_titles:
+
+        public_score = []
+        private_score = []
+        private_adapt = []
+        public_adapt = []
+        private_effort = []
+        public_effort = []
+
+        _series_dict = {}
+        _series_dict['values'] = {'public_score': public_score,
+                                  "private_score": private_score,
+                                  "private_adapt": private_adapt,
+                                  "public_adapt": public_adapt,
+                                  "private_effort": private_effort,
+                                  "public_effort": public_effort}
+        _series_dict['std'] = {'public_score': public_score.copy(),
+                               "private_score": private_score.copy(),
+                               "private_adapt": private_adapt.copy(),
+                               "public_adapt": public_adapt.copy(),
+                               "private_effort": private_effort.copy(),
+                               "public_effort": public_effort.copy()}
+
+        for time in times:
+            _series_dict['speed_' + str(time)] = {'public_score': [],
+                                                  "private_score": [],
+                                                  "private_adapt": [],
+                                                  "public_adapt": [],
+                                                  "private_effort": [],
+                                                  "public_effort": []}
+            _series_dict['acceleration_' + str(time)] = {'public_score': [],
+                                                         "private_score": [],
+                                                         "private_adapt": [],
+                                                         "public_adapt": [],
+                                                         "private_effort": [],
+                                                         "public_effort": []}
+
+        # print(_series_dict)
 
         # _df = dfs[pre_title].loc[(dfs[pre_title]['genre'] == 'EP') | (dfs[pre_title]['genre'] == 'TP')]
 
@@ -1562,8 +1628,65 @@ if __name__ == '__main__':
         #             _df['profits'].max(), min_profit)
 
         max_period = dfs[pre_title]['period'].max()
+        # print(dfs[pre_title].period.unique())
+        for period in sorted(dfs[pre_title].period.unique()):
+            _df = dfs[pre_title].loc[dfs[pre_title]['period'] == period]
 
-        for genre in [('TP', _max_profits_ep, _min_profits_ep), ('EP', _max_profits_tp, _min_profits_tp)]:
+            priv_cond = (_df['genre'] == 'EP') | (_df['genre'] == 'TP')
+
+            _private = _df.loc[priv_cond]
+            # print(pre_title)
+            _private_score = _private['profits'].mean()
+            _private_adapt = _private['LSS_tot'].mean()
+            _private_effort = _private['LSS_weak'].mean()
+
+            private_score.append(_private_score)
+            private_adapt.append(_private_adapt)
+            private_effort.append(_private_effort)
+            _series_dict['std']['private_score'].append(_private['profits'].std())
+            _series_dict['std']['private_adapt'].append(_private['LSS_tot'].std())
+            _series_dict['std']['private_effort'].append(_private['LSS_weak'].std())
+
+            if 'YES' not in pre_title:
+                continue
+            else:
+                publ_cond = (_df['genre'] != 'EP') & (_df['genre'] != 'TP') & \
+                            (_df['genre'] != 'DD')
+                _public = _df.loc[publ_cond]
+                _public_score = _public['current_state'].mean()
+                _public_adapt = _public['LSS_tot'].mean()
+                _public_effort = _public['LSS_weak'].mean()
+                public_score.append(_public_score)
+                public_adapt.append(_public_adapt)
+                public_effort.append(_public_effort)
+
+                _series_dict['std']['public_score'].append(_public['current_state'].std())
+                _series_dict['std']['public_adapt'].append(_public['LSS_tot'].std())
+                _series_dict['std']['public_effort'].append(_public['LSS_weak'].std())
+
+            # series_dict[pre_title]['values'] = _series_dict
+
+        for _series_speed in _series_dict['values']:
+
+            series_speed = _series_dict['values'][_series_speed]
+
+            for time in times:
+                speed = [(series_speed[i] - series_speed[i - time]) / series_speed[i - time]
+                         for i in range(time, len(series_speed))
+                         if series_speed[i - time] != 0 or series_speed[i - time] != 0.0]
+                _series_dict['speed_' + str(time)][_series_speed] = speed
+
+            for time in times:
+                for _series_acceleration in _series_dict['speed_' + str(time)]:
+                    series_acceleration = _series_dict['speed_' + str(time)][_series_acceleration]
+                    acceleration = [(series_acceleration[i] - series_acceleration[i - time]) / series_acceleration[i - time]
+                                    for i in range(time, len(series_acceleration))
+                                    if series_acceleration[i - time] != 0 or series_acceleration[i - time] != 0.0]
+                    _series_dict['acceleration_' + str(time)][_series_acceleration] = acceleration
+
+        series_dict[pre_title.split('__')[0]] = _series_dict
+
+        for genre in [('TP', _max_profits_tp, _min_profits_tp), ('EP', _max_profits_ep, _min_profits_ep)]:
             for seed in dfs[pre_title].seed.unique():
                 _df = dfs[pre_title].loc[(dfs[pre_title]['genre'] == genre[0])
                                          & (dfs[pre_title]['seed'] == seed)]
@@ -1588,8 +1711,7 @@ if __name__ == '__main__':
             for pm in [('DBB', _max_bndes, _min_bndes), ('EPM', _max_epm, _min_epm), ('TPM', _max_tpm, _min_tpm)]:
                 for seed in dfs[pre_title].seed.unique():
                     _df = dfs[pre_title].loc[(dfs[pre_title]['genre'] == pm[0])
-                                             & (dfs[pre_title]['seed'] == seed)
-                                             & (dfs[pre_title]['period'] == max_period)]
+                                             & (dfs[pre_title]['seed'] == seed)]
                     _max = _df['current_state'].max()
                     _min = _df['current_state'].min()
                     _max_strong = _df['LSS_tot'].max()
@@ -1635,11 +1757,16 @@ if __name__ == '__main__':
     print("_min_epm", _min_epm)
     print("_min_tpm", _min_tpm)"""
 
+    print(series_dict)
+    picklefile = 'accelerate_my_heart' + ".pkl"
+    with open(picklefile, "wb") as pkl_wb_obj:
+        pickle.dump(series_dict, pkl_wb_obj)
+
     max_bndes = 0.0
-    max_epm = 0.0
     max_tpm = 0.0
-    min_bndes = 0.0
+    max_epm = 0.0
     min_epm = 0.0
+    min_bndes = 0.0
     min_tpm = 0.0
     max_profits_ep = 0.0
     max_profits_tp = 0.0
@@ -1695,6 +1822,7 @@ if __name__ == '__main__':
                 print(_l[2], 'before', _y_min)
                 _l[1] = y_min
             print(_l[2], 'after ', _l[1], 'and the previous value was not an outlier:', _l[1] in [_y_max, _y_min])
+            # print(_l[2], [_y_max, _y_min], _l[0])
         else:
             _l[1] = 0.20011002/(n+1)
 
@@ -1735,59 +1863,91 @@ if __name__ == '__main__':
 
         print('normalizing the private agents in', pre_title.split('__')[0])
 
+        private_cond = (agents_df['genre'] == 'EP') | (agents_df['genre'] == 'TP')
+        public_cond = (agents_df['genre'] != 'EP') & (agents_df['genre'] != 'TP') & (agents_df['genre'] != 'DD')
+
+        # agents_df.loc[agents_df['genre'] == 'TP']['profits'] = agents_df.loc[agents_df['genre'] == 'TP']['profits'].clip(lower=min_profits_tp, upper=max_profits_tp)
+        # agents_df.loc[agents_df['genre'] == 'EP']['profits'] = agents_df.loc[agents_df['genre'] == 'EP']['profits'].clip(lower=min_profits_ep, upper=max_profits_ep)
+        # agents_df.loc[private_cond]["LSS_tot"] = agents_df.loc[private_cond]["LSS_tot"].clip(lower=min_private_adapt, upper=max_private_adapt)
+        # agents_df.loc[private_cond]["LSS_weak"] = agents_df.loc[private_cond]["LSS_weak"].clip(lower=min_private_adapt_weak, upper=max_private_adapt_weak)
+
         for row in range(0, len(agents_df)):
             if agents_df.loc[row, :]['genre'] == 'TP':
-                agents_df.loc[row, 'profits_norm'] = (agents_df.loc[row, 'profits'] + abs(min_profits_tp)
-                                                      ) / (max_profits_tp - min_profits_tp*0)
+                agents_df.loc[row, 'profits_norm'] = (np.clip(agents_df.loc[row, 'profits'],
+                                                              a_min=min_profits_tp,
+                                                              a_max=max_profits_tp) - min_profits_tp
+                                                      ) / (max_profits_tp - min_profits_tp)
             elif agents_df.loc[row, :]['genre'] == 'EP':
-                agents_df.loc[row, 'profits_norm'] = (agents_df.loc[row, 'profits'] + abs(min_profits_ep)
-                                                      ) / (max_profits_ep - min_profits_ep*0)
+                agents_df.loc[row, 'profits_norm'] = (np.clip(agents_df.loc[row, 'profits'],
+                                                              a_min=min_profits_ep,
+                                                              a_max=max_profits_ep) - min_profits_ep
+                                                      ) / (max_profits_ep - min_profits_ep)
 
             if agents_df.loc[row, :]['genre'] in ['EP', 'TP']:
-                agents_df.loc[row, 'LSS_tot_norm'] = (agents_df.loc[row, 'LSS_tot'] + abs(min_private_adapt)
-                                                      ) / (max_private_adapt - min_private_adapt * 0)
-                agents_df.loc[row, 'LSS_weak_norm'] = (agents_df.loc[row, 'LSS_weak'] + abs(min_private_adapt_weak)
-                                                       ) / (max_private_adapt_weak - min_private_adapt_weak * 0)
+                agents_df.loc[row, 'LSS_tot_norm'] = (np.clip(agents_df.loc[row, 'LSS_tot'],
+                                                              a_min=min_private_adapt,
+                                                              a_max=max_private_adapt) - min_private_adapt
+                                                      ) / (max_private_adapt - min_private_adapt )
+                agents_df.loc[row, 'LSS_weak_norm'] = (np.clip(agents_df.loc[row, 'LSS_weak'],
+                                                               a_min=min_private_adapt_weak,
+                                                               a_max=max_private_adapt_weak) - min_private_adapt_weak
+                                                       ) / (max_private_adapt_weak - min_private_adapt_weak )
 
         if 'YES' in pre_title:
             public_var = 'current_state_norm'
             print('normalizing the public agents in', pre_title.split('__')[0])
 
+            # agents_df.loc[public_cond]['current_state'].clip(lower=min_bndes, upper=max_bndes)
+            # agents_df.loc[public_cond]['current_state'].clip(lower=min_epm, upper=max_epm)
+            # agents_df.loc[public_cond]['current_state'].clip(lower=min_tpm, upper=max_tpm)
+            # agents_df.loc[public_cond]['LSS_tot'].clip(lower=min_public_adapt, upper=max_public_adapt)
+            # agents_df.loc[public_cond]['LSS_weak'].clip(lower=min_public_adapt_weak, upper=max_public_adapt_weak)
+
             for row in range(0, len(agents_df)):
                 if agents_df.loc[row, :]['genre'] == 'DBB':
-                    agents_df.loc[row, 'current_state_norm'] = (agents_df.loc[row, 'current_state'] + abs(min_bndes)
-                                                                ) / (max_bndes - min_bndes*0)
+                    agents_df.loc[row, 'current_state_norm'] = (np.clip(agents_df.loc[row, 'current_state'],
+                                                                       a_min=min_bndes,
+                                                                       a_max=max_bndes) - min_bndes
+                                                                ) / (max_bndes - min_bndes)
                 elif agents_df.loc[row, :]['genre'] == 'EPM':
-                    agents_df.loc[row, 'current_state_norm'] = (agents_df.loc[row, 'current_state'] + abs(min_epm)
-                                                                ) / (max_epm - min_epm*0)
+                    agents_df.loc[row, 'current_state_norm'] = (np.clip(agents_df.loc[row, 'current_state'],
+                                                                       a_min=min_epm,
+                                                                       a_max=max_epm) - min_epm
+                                                                ) / (max_epm - min_epm)
                 elif agents_df.loc[row, :]['genre'] == 'TPM':
-                    agents_df.loc[row, 'current_state_norm'] = (agents_df.loc[row, 'current_state'] + abs(min_tpm)
-                                                                ) / (max_tpm - min_tpm*0)
+                    agents_df.loc[row, 'current_state_norm'] = (np.clip(agents_df.loc[row, 'current_state'],
+                                                                       a_min=min_tpm,
+                                                                       a_max=max_tpm) - min_tpm
+                                                                ) / (max_tpm - min_tpm)
 
                 if agents_df.loc[row, :]['genre'] in ['EPM', 'DBB', 'TPM']:
-                    agents_df.loc[row, 'LSS_tot_norm'] = (agents_df.loc[row, 'LSS_tot'] + abs(min_public_adapt)
-                                                          ) / (max_public_adapt - min_public_adapt * 0)
-                    agents_df.loc[row, 'LSS_weak_norm'] = (agents_df.loc[row, 'LSS_weak'] + abs(min_public_adapt_weak)
-                                                           ) / (max_public_adapt_weak - min_public_adapt_weak * 0)
-
-        private_cond = (agents_df['genre'] == 'EP') | (agents_df['genre'] == 'TP')
-        public_cond = (agents_df['genre'] != 'EP') & (agents_df['genre'] != 'TP') & (agents_df['genre'] != 'DD')
+                    agents_df.loc[row, 'LSS_tot_norm'] = (np.clip(agents_df.loc[row, 'LSS_tot'],
+                                                                 a_min=min_public_adapt,
+                                                                 a_max=max_public_adapt) - min_public_adapt
+                                                          ) / (max_public_adapt - min_public_adapt )
+                    agents_df.loc[row, 'LSS_weak_norm'] = (np.clip(agents_df.loc[row, 'LSS_weak'],
+                                                                  a_min=min_public_adapt_weak,
+                                                                  a_max=max_public_adapt_weak) - min_public_adapt_weak
+                                                           ) / (max_public_adapt_weak - min_public_adapt_weak )
 
         private = {'df': agents_df.loc[private_cond], 'var': private_var}
         public = {'df': agents_df.loc[public_cond], 'var': public_var}
 
         if 'YES' in pre_title:
             number = 0
-            list_o_graphs = [[list_o_adapt[0], public, list_o_adapt[0], private], [list_o_adapt[1], public, list_o_adapt[1], private],
-                             [public_var, public, list_o_adapt[0], private], [public_var, public, list_o_adapt[1], private],
-                             [list_o_adapt[0], public, private_var, private], [list_o_adapt[1], public, private_var, private],
+            list_o_graphs = [[list_o_adapt[0], public, list_o_adapt[0],private],
+                             [list_o_adapt[1], public, list_o_adapt[1], private],
+                             [public_var, public, list_o_adapt[0], private],
+                             [public_var, public, list_o_adapt[1], private],
+                             [list_o_adapt[0], public, private_var, private],
+                             [list_o_adapt[1], public, private_var, private],
                              [public_var, public, private_var, private],
                              [public_var, public, list_o_adapt[0], public],
                              [public_var, public, list_o_adapt[1], public],
                              [private_var, private, list_o_adapt[0], private],
                              [private_var, private, list_o_adapt[1], private]]  # x is public, y is private
         else:
-            number = 45  # (number of speeds + actual values + standardized) *
+            number = 11 * len(times)  # (number of speeds + actual values) *
             list_o_graphs = [[private_var, private, list_o_adapt[0], private],
                              [private_var, private, list_o_adapt[1], private]]
 
@@ -1798,7 +1958,7 @@ if __name__ == '__main__':
             for speed in [True, False]:
                 # name = name + ' (every ' + str(time) + ' months) '
                 if speed is True:
-                    for time in [12, 24, 48]:
+                    for time in times:
                         # name = 'speed of ' + name
                         try:
                             scatter_graph(
@@ -1816,7 +1976,7 @@ if __name__ == '__main__':
                                 pre_title.split('__')[0]])
                         number += 1
                 else:
-                    for norm in [False, True]:
+                    for norm in [False]: #, True]:
                         if norm is True:
                             for normalization in [False]:  # , True]:  # They are basically the same
                                 norm_name = ' (normalized)' if normalization is True else ' (standardized)'
@@ -1842,6 +2002,7 @@ if __name__ == '__main__':
                                           2]] + ' of ' + y_axis_name + ' (actual values)')
                             number += 1
 
+        number = 1982
         graphs_list = [
             {
                 "name_o_var": names[pre_title.split('__')[0]] + ' ' + 'Number of adaptations',
@@ -1924,7 +2085,7 @@ if __name__ == '__main__':
             },
             {
                 "name_o_var": names[pre_title.split('__')[
-                    0]] + ' ' + 'Investment in R&D to shareholders of Technology producers',
+                    0]] + ' ' + 'Investment in R&D of Technology producers',
                 "var": 'RandD',
                 "dataframe": agents_df.loc[agents_df['genre'] == 'TP'],
                 "x_axis": 'period',
@@ -1976,7 +2137,7 @@ if __name__ == '__main__':
 
         df = pd.DataFrame(total.loc[total['Number'] == number]).set_index(['Type']).drop(['Number'], axis=1)
 
-        _df = df + abs(df.min())
+        _df = df  # + abs(df.min())
 
         _df.index = [str(i).split(' -- ')[0] for i in _df.index]
 
@@ -1996,7 +2157,12 @@ if __name__ == '__main__':
 
         for j in range(len(normal_df.columns)):
             for i in range(len(normal_df.index)):
-                text = ax.text(j, i, round(df.iloc[i, j], 3),
+
+                #can only show 4 characters
+
+                roundness = max(0, 3 - len(str(int(df.iloc[i, j]))))
+
+                text = ax.text(j, i, round(df.iloc[i, j], roundness),
                                ha="center", va="center", color="black")
 
         cbar = plt.colorbar(im)

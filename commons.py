@@ -638,7 +638,7 @@ def thresholding_FF(threshold, disclosed_var, decision_var):
     return"""
 
 
-def evaluating_FF(name, add=None, change=None):
+def evaluating_FF(name, add= None, change=None):
     """
     This function evaluates what happen to a certain agent at the previous period
 
@@ -715,15 +715,17 @@ def evaluating_FF(name, add=None, change=None):
         # ic(present, np.mean(hist))
         upper_cond = np.mean(present) > (1 + LSS_thresh) * np.mean(hist)
         lower_cond = np.mean(present) < (1 - LSS_thresh) * np.mean(hist)
+        _range = (1 + LSS_thresh) * np.mean(hist) - (1 - LSS_thresh) * np.mean(hist)
+        # print('range', _range)
 
-        if upper_cond is True or lower_cond is True:
-            if upper_cond is True:
+        if upper_cond == True or lower_cond == True:
+            if upper_cond == True:
                 # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
                 # current is better than hist, so now we run the distribution
                 verdict = 'add' if add[genre] is True else 'keep'
                 impatience_increase = -1
                 ratio = np.mean(hist) / np.mean(present)
-            elif lower_cond is True:
+            elif lower_cond == True:
                 # ic(name, present, (1 - LSS_thresh) * np.mean(hist), LSS_thresh, np.mean(hist))
                 # current is better than hist, so now we run the distribution
                 verdict = 'change' if change[genre] is True else 'keep'
@@ -857,14 +859,18 @@ def post_evaluating_FF(strikes, verdict, name, strikables_dict):
         # print(options, previous)
         # ic(AGENTS[env.now][name]["LSS_tot"])
 
-        _memory = AGENTS[env.now][name]['memory'][0]
-        if verdict in ['add', 'change'] and env.now > _memory + 1:
+        """if AGENTS[env.now][name]['genre'] == 'TP':
+            print(options, previous, options != previous, verdict)
+            print(AGENTS[env.now][name]["LSS_tot"])"""
+
+        # _memory = AGENTS[env.now][name]['memory'][0]
+        if verdict in ['add', 'change'] and env.now > 0:
             """
             If the agent added or changed something, it resets its impatience: impatience only builds up until something 
             happens
             """
             # print('Impatience of agent', name, 'was reset at period', env.now, 'from', AGENTS[env.now][name]['impatience'][0], ' to ', AGENTS[0][name]['impatience'][0])
-            AGENTS[env.now][name]['impatience'][0] = AGENTS[_memory][name]['impatience'][0]
+            AGENTS[env.now][name]['impatience'][0] = AGENTS[0][name]['impatience'][0]
 
     # updated the list
 
@@ -953,6 +959,7 @@ def public_deciding_FF(name):
     past_weight = now['past_weight'][0]
     previous_var = now['decision_var']
     # SorT = now['dd_SorT']['current']
+    remain = max(0, AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (24 * 30))
 
     # ratio = previous_var
     if random.uniform(0, 1) > randomness:
@@ -978,7 +985,7 @@ def public_deciding_FF(name):
             ratio = (np.mean(results) - results[-1])
             addition = halfnorm.rvs(loc=0, scale=abs(ratio))
             addition = addition / config.doug if ratio > 0 else -addition / config.doug
-            new_value = max(0, min(1, previous_var + (1 - past_weight) * addition))
+            new_value = previous_var + (1 - past_weight) * addition
 
         else:
             new_value = previous_var
@@ -993,8 +1000,15 @@ def public_deciding_FF(name):
 
     else:
         _random = random.normalvariate(previous_var, (1 - past_weight))
-        new_value = max(0, min(1, _random))
+        new_value = _random
     # print(name, env.now, new_value)
+    new_value += np.median(normalize([0, remain, AGENTS[env.now - 1]['DD'].copy()['Demand']]))/config.doug
+    """print('remaining add', np.median(normalize([
+        max(AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (24 * 30),0),
+        AGENTS[0]['DD'].copy()['Demand'],
+        0])))"""
+    """print(AGENTS[env.now - 1]['DD'].copy()['Remaining_demand'] / (24 * 30))"""
+    new_value = max(0, min(1, new_value))
 
     return new_value
 
@@ -1281,12 +1295,29 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
                 """ic(interest_r, i.get('lifetime'), i.get('Lumps'), i.get('capacity'),
                                         i.get('building_time'), i.get('CAPEX'), i.get('OPEX'), price, i.get('CF'),
                                         AMMORT, cash_flow_risk, financing_risk, True, NPV, i['source'])"""
-                adressed_projects_NPVs.append({'code': _, 'NPV': NPV, 'capex': i['CAPEX'], "r": interest_r})
+
+                N = AGENTS[env.now - 1][i['TP']]['RandD'] if i['TP'] != 'TP_thermal' else 0
+                G = i.get('avoided_emissions') if i['TP'] != 'TP_thermal' else 0
+                C = AGENTS[env.now - 1][i['TP']]['capacity'] if i['TP'] != 'TP_thermal' else 0
+
+                adressed_projects_NPVs.append({'code': _, 'NPV': NPV, 'capex': i['CAPEX'], "r": interest_r,
+                                               'green': G,
+                                               'innovation': N,
+                                               'capacity': C})
                 adressed_projects.update({_: i.copy()})
         if genre == 'BB':
             adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['NPV'], reverse=True)
         else:
-            adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['capex'])
+            rationale = AGENTS[env.now - 1][name]['rationale'][0]
+            if rationale == 'green':
+                adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['green'], reverse=True)
+            elif rationale == 'capacity':
+                adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['capacity'], reverse=True)
+            elif rationale == 'innovation':
+                adressed_projects_NPVs = sorted(adressed_projects_NPVs, key=lambda x: x['innovation'], reverse=True)
+            else:
+                print('how bizarre', AGENTS[env.now - 1][name]['rationale'][0], AGENTS[env.now - 1][name])
+                random.shuffle(adressed_projects_NPVs)
 
     # added_mwh = 0
     for project in adressed_projects_NPVs:
@@ -1308,14 +1339,21 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         if genre == 'BB':
             acceptance_cond = RISKS[k] < value and npv > NPV_THRESHOLD and new_new_wallet >= 0
         else:
-            if config.FUSS_PERIOD < env.now or added_mwh > AGENTS[env.now - 1]['DD']['Remaining_demand']:
+            # print('mwh', added_mwh, AGENTS[env.now - 1]['DD']['Demand'] * 24 * 30)
+            # print('mwh', env.now, added_mwh, AGENTS[env.now - 1]['DD']['Demand'] * 24 * 30, AGENTS[env.now - 1]['DD']['Remaining_demand'])
+            if env.now > 13 and added_mwh > 0.1 * AGENTS[env.now - 1]['DD']['Demand'] * 24 * 30:
+                # print(AGENTS[env.now - 1]['DD']['Remaining_demand'])
                 acceptance_cond = k == accepted_source and j['TP'] in accepted_tps and new_new_wallet >= 0  # and car_ratio >= BASEL
-                # print(env.now , 'FLAMENGO') if acceptance_cond == True else print(env.now , 'fogão because', k == accepted_source, j['TP'] in accepted_tps, new_new_wallet >= 0)
+                # print(env.now , j['capacity'], j['source'], 'FLAMENGO') if acceptance_cond == True else print(env.now , 'fogão because', k == accepted_source, j['TP'] in accepted_tps, new_new_wallet >= 0)
+
+                """if k == accepted_source is False and j['TP'] in accepted_tps is True:
+                    print(j)"""
+
                 # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond, car_ratio) if acceptance_cond == True else None
             else:
                 # if there is no excess demand, BNDES doesn't finance capacity
-                acceptance_cond = new_new_wallet >= 0  # and car_ratio >= BASEL
-                # print(env.now , 'vasquinho') if acceptance_cond == True else print(env.now , 'fluzão')
+                acceptance_cond = random.choice([True, False]) # new_new_wallet >= 0  # and car_ratio >= BASEL
+                # print(env.now , j['capacity'], j['source'], 'vasquinho') if acceptance_cond == True else print(env.now , 'fluzão')
             # ic(k, accepted_source, j['TP'], accepted_tps, interest_r, new_new_wallet, acceptance_cond)
 
         """if AGENTS[env.now-1]['DD']['Remaining_demand']>0:
@@ -1325,7 +1363,8 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
         # print(name, acceptance_cond, new_new_wallet >= 0, car_ratio >= BASEL)
         # print(acceptance_cond is True and new_new_wallet >= 0 and car_ratio >= BASEL)
         if acceptance_cond == True:  # and car_ratio >= BASEL:
-            added_mwh += j.get('capacity') * 24 * 30 * j.get('CF') * j['Lumps']
+            # print(j.get('capacity'), j)
+            added_mwh += j.get('MWh') #  * 24 * 30 * j.get('CF')
             new_wallet = new_new_wallet
             new_receivables = new_new_receivables
             # print("new contract", j)
@@ -1370,6 +1409,7 @@ def financing_FF(genre, name, my_wallet, my_receivables, value, financing_index,
     # print(env.now, my_wallet, new_wallet, 'wallets')
     my_wallet = new_wallet
     my_receivables = new_receivables
+    # print('end', added_mwh)
     return {'wallet': my_wallet, 'receivables': my_receivables, 'financing_index': financing_index, 'added_mwh' : added_mwh}
 
 def bank_sending_FF():
@@ -1387,7 +1427,7 @@ def bank_sending_FF():
         if agent['genre'] == 'BB':
             BB_.append([agent['name'], agent['decision_var']])
         elif agent['genre'] == 'DBB':
-            BB_.append([agent['name'], agent['disclosed_var']])
+            BB_.append([agent['name'], 1-agent['disclosed_var']])
     number = np.random.poisson(1)
     # print(BB_)
     number = number if number < len(BB_) else len(BB_) - 1

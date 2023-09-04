@@ -200,6 +200,7 @@ def run_TP(name,
         _past_weight = past_weight[0] if env.now == 0 else AGENTS[env.now - 1][name]['past_weight'][0]
         _strategy = strategy[0] if env.now == 0 else AGENTS[env.now - 1][name]['strategy'][0]
         value = decision_var
+        LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         profits = 0  # in order to get the profits of this period alone
 
         RandD = int(RandD)
@@ -339,7 +340,7 @@ def run_TP(name,
                 RnD_threshold *= a  # ** (1 + rNd_INCREASE)
                 # print('RnD_threshold', math.e ** ((1 - 1/tech_age) + rNd_INCREASE),  a)
                 """ we have to check where did the innovation occur"""
-                what_on = random.choice(['base_CAPEX', 'OPEX', 'MW'])
+                what_on = random.choice(['base_CAPEX', 'OPEX'])  # , 'MW'])
                 """ if innovation ocurred then we multiply it"""
                 if what_on == 'MW':
                     new_what_on = a * Technology[what_on]
@@ -449,7 +450,7 @@ def run_TP(name,
                   'PCT': prod_cap_pct[0]/prod_cap_pct[1],
                   "radical": radical,
                   "marginal": marginal,
-                  "self.min_price": min_price
+                  "min_price": min_price
                   }
 
         if env.now > 1:
@@ -462,6 +463,7 @@ def run_TP(name,
         AGENTS[env.now][name] = update.copy()
         if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
+            # print(env.now, name, LSS_tot, update["LSS_weak"], value)
             # profits_dedicting_FF(name)
 
         yield env.timeout(1)
@@ -469,7 +471,7 @@ def run_TP(name,
 
 class TPM(object):
     def __init__(self, env, wallet, boundness_cost, instrument, source, decision_var, LSS_thresh, impatience,
-                 disclosed_thresh, past_weight, memory, discount, policies, rationale):
+                 disclosed_thresh, past_weight, memory, discount, policies, rationale, periodicity):
         self.env = env
         self.genre = 'TPM'
         self.subgenre = 'TPM'
@@ -497,9 +499,13 @@ class TPM(object):
                            "source": source,
                            "disclosed_thresh": disclosed_thresh,
                            "past_weight": past_weight,
-                           'instrument': instrument}
+                           'instrument': instrument,
+                           'rationale': rationale,
+                           'periodicity': periodicity}
 
         self.strikables_dict = strikable_dicting(strikables_dict)
+        
+        self.periodicity = periodicity
 
         self.LSS_tot = 0
 
@@ -522,7 +528,8 @@ class TPM(object):
                                           self.policies,
                                           self.rationale,
                                           self.strikables_dict,
-                                          self.LSS_tot))
+                                          self.LSS_tot,
+                                          self.periodicity))
 
 
 def run_TPM(genre,
@@ -544,7 +551,8 @@ def run_TPM(genre,
             policies,
             rationale,
             strikables_dict,
-            LSS_tot):
+            LSS_tot,
+            periodicity):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, AMMORT, INSTRUMENT_TO_SOURCE_DICT, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.AMMORT, config.INSTRUMENT_TO_SOURCE_DICT, config.env
 
     while True:
@@ -564,6 +572,8 @@ def run_TPM(genre,
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
         _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
+        _periodicity = periodicity[0] if env.now == 0 else AGENTS[env.now - 1][name]['periodicity'][0]
+        LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         value = disclosed_var
         # wallet = _wallet if not env.now > 0 and env.now % 12 == 0 else AGENTS[0][name]['wallet'] # the budget is monthly
         wallet = _wallet  # if not env.now % 12 == 0 else 0
@@ -631,14 +641,27 @@ def run_TPM(genre,
 
         ###############################################################################################################
         #                                                                                                             #
+        #                           Now, the TPM analyses what happened to the system due to                          #
+        #                                              its intervention                                               #
+        #                                                                                                             #
+        ###############################################################################################################
+            
+        if env.now > 2 and env.now % _periodicity == 0:
+            add_source = source_reporting_FF(name, _past_weight)
+            for entry in range(len(source) - 1):
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount) ** _periodicity
+                source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
+
+        ###############################################################################################################
+        #                                                                                                             #
         #                                And then, the TPM will decide what to do next                                #
         #                                                                                                             #
         ###############################################################################################################
 
         if env.now > 0:
-            decision_var = max(0, min(1, public_deciding_FF(name)))
+            decision_var = max(0, min(1, public_deciding_FF(name)))  # if env.now % _periodicity == 0 else decision_var
             disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
-            decisions = evaluating_FF(name)
+            decisions = evaluating_FF(name) if env.now % _periodicity == 0 else {'verdict': 'keep', 'strikes': False, 'impatience_increase': 0}
             verdict = decisions['verdict']
 
         ###############################################################################################################
@@ -667,7 +690,8 @@ def run_TPM(genre,
             "rationale": rationale,
             "current_state": current_stating_FF(_rationale),
             "LSS_tot": LSS_tot,
-            "strikables_dict": strikables_dict
+            "strikables_dict": strikables_dict,
+            "periodicity": periodicity
         }
 
         if env.now > 1:
@@ -680,12 +704,13 @@ def run_TPM(genre,
         AGENTS[env.now][name] = update.copy()
         if env.now > 1:
             post_evaluating_FF(decisions['strikes'], verdict, name, strikables_dict)
+            # print(env.now, name, LSS_tot, update["LSS_weak"], value)
 
         yield env.timeout(1)
 
 
 class EPM(object):
-    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, decision_var, auction_capacity, instrument, source, LSS_thresh, impatience, disclosed_thresh, past_weight, memory, discount, policies, rationale):
+    def __init__(self, env, wallet, PPA_expiration, PPA_limit, COUNTDOWN, decision_var, auction_capacity, instrument, source, LSS_thresh, impatience, disclosed_thresh, past_weight, memory, discount, policies, rationale, periodicity):
         self.env = env
         self.genre = 'EPM'
         self.subgenre = 'EPM'
@@ -727,6 +752,7 @@ class EPM(object):
         self.discount = discount
         self.policies = policies
         self.rationale = rationale
+        self.periodicity = periodicity
 
         self.LSS_tot = 0
         strikables_dict = {'impatience': impatience,
@@ -737,7 +763,8 @@ class EPM(object):
                            'discount': discount,
                            'disclosed_thresh': disclosed_thresh,
                            'rationale': rationale,
-                           'instrument': instrument
+                           'instrument': instrument,
+                           'periodicity': periodicity,
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
@@ -767,7 +794,8 @@ class EPM(object):
                                           self.policies,
                                           self.rationale,
                                           self.LSS_tot,
-                                          self.strikables_dict))
+                                          self.strikables_dict, 
+                                          self.periodicity))
 
 
 def run_EPM(genre,
@@ -795,7 +823,8 @@ def run_EPM(genre,
             policies,
             rationale,
             LSS_tot,
-            strikables_dict):
+            strikables_dict,
+            periodicity):
 
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, DEMAND, AUCTION_WANTED_SOURCES, AMMORT, INSTRUMENT_TO_SOURCE_DICT, MARGIN, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.DEMAND, config.AUCTION_WANTED_SOURCES, config.AMMORT, config.INSTRUMENT_TO_SOURCE_DICT, config.MARGIN, config.env  # globals
 
@@ -817,6 +846,8 @@ def run_EPM(genre,
         _disclosed_thresh = disclosed_thresh[0] if env.now == 0 else AGENTS[env.now - 1][name]['disclosed_thresh'][0]
         _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
+        _periodicity = periodicity[0] if env.now == 0 else AGENTS[env.now - 1][name]['periodicity'][0]
+        LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         value = disclosed_var
 
         ###############################################################################################################
@@ -920,16 +951,19 @@ def run_EPM(genre,
                         auction_size *= entry_value
                         auction_size += min_auction
 
-                        remaining = AGENTS[env.now-1]['DD'].copy()['Remaining_demand']/(24 * 30)
+                        # remaining = AGENTS[env.now-1]['DD'].copy()['Remaining_demand']/(24 * 30)
 
-                        auction_MW = max(
+                        """auction_MW = max(
                             min(
                                 auction_size
                                 + max(0, remaining),
                                 max_auction),
-                            min_auction)
+                            min_auction)"""
 
-                        # ic(env.now, auction_MW, remaining, len(possible_projects))
+                        auction_MW = max(
+                            min(auction_size, max_auction), min_auction)
+
+                        # ic(env.now, auction_MW, len(possible_projects))
 
                         remaining_capacity = auction_MW
 
@@ -943,12 +977,18 @@ def run_EPM(genre,
                         """
 
                         uncontracted_projects = []
+                        # _budget = budget
+                        # print(_budget)
                         for project in possible_projects:
-                            if remaining_capacity > 0:
+                            # print(12 * project['price'] * project['MWh'])
+                            if remaining_capacity > 0:  # and _budget - 12 * project['price'] * project['MWh']>0:
                                 """ if there is still capacity to contract, then the project is contracted"""
                                 contracted_projects.append(project)
+                                # _budget -= 12 * project['price'] * project['MWh']
+                                # print('contracted', project['source'])
                             else:
                                 uncontracted_projects.append(project)
+                                # print('did not contract', project['source'])
                             remaining_capacity -= project['capacity']
                         """ then we cycle through the codes of the contracted projects in order to tell the proponent 
                         agents that their projects were contracted"""
@@ -999,10 +1039,10 @@ def run_EPM(genre,
         #                                                                                                             #
         ###############################################################################################################
 
-        if env.now > 2:
+        if env.now > 2 and env.now % _periodicity == 0:
             add_source = source_reporting_FF(name, _past_weight)
             for entry in range(len(source) - 1):
-                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount) ** _periodicity
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
         ###############################################################################################################
@@ -1012,9 +1052,9 @@ def run_EPM(genre,
         ###############################################################################################################
 
         if env.now > 0:
-            decision_var = max(0, min(1, public_deciding_FF(name)))
+            decision_var = max(0, min(1, public_deciding_FF(name)))  # if env.now % _periodicity == 0 else decision_var
             disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
-            decisions = evaluating_FF(name)
+            decisions = evaluating_FF(name) if env.now % _periodicity == 0 else {'verdict': 'keep', 'strikes': False, 'impatience_increase': 0}
             verdict = decisions['verdict']
 
         ###############################################################################################################
@@ -1050,7 +1090,8 @@ def run_EPM(genre,
             "rationale": rationale,
             "LSS_tot": LSS_tot,
             "strikables_dict": strikables_dict,
-            "current_state": current_stating_FF(_rationale)
+            "current_state": current_stating_FF(_rationale),
+            "periodicity": periodicity
         }
 
         if env.now > 1:
@@ -1069,7 +1110,7 @@ def run_EPM(genre,
 
 class DBB(object):
     def __init__(self, env, name, wallet, instrument, source, decision_var, LSS_thresh, past_weight,
-                 memory, discount, policies, impatience, disclosed_thresh, rationale):
+                 memory, discount, policies, impatience, disclosed_thresh, rationale, periodicity):
         # Pre-Q:
         # self, env, wallet, dd_policy, dd_source, decision_var, dd_kappas, dd_qual_vars, dd_backwardness,
         #                  dd_avg_time, dd_discount, policies, dd_index, dd_eta, dd_ambition, dd_target, dd_rationale,
@@ -1117,11 +1158,13 @@ class DBB(object):
                            'discount': discount,
                            'disclosed_thresh': disclosed_thresh,
                            'rationale': rationale,
-                           'instrument': instrument
+                           'instrument': instrument,
+                           'periodicity': periodicity
                            }
 
         self.strikables_dict = strikable_dicting(strikables_dict)
         self.added_mwh = 0
+        self.periodicity = periodicity
 
         self.action = env.process(run_DBB(
             self.NPV_THRESHOLD_DBB,
@@ -1148,7 +1191,8 @@ class DBB(object):
             self.strikables_dict,
             self.LSS_tot,
             self.accepted_tps,
-            self.added_mwh))
+            self.added_mwh,
+            self.periodicity))
 
 
 def run_DBB(NPV_THRESHOLD_DBB,
@@ -1175,7 +1219,8 @@ def run_DBB(NPV_THRESHOLD_DBB,
             strikables_dict,
             LSS_tot,
             accepted_tps,
-            added_mwh):
+            added_mwh,
+            periodicity):
 
     global decisions
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, POLICY_EXPIRATION_DATE, INSTRUMENT_TO_SOURCE_DICT, RISKS, AGENTS_r, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.POLICY_EXPIRATION_DATE, config.INSTRUMENT_TO_SOURCE_DICT, config.RISKS, config.AGENTS_r, config.env  # globals
@@ -1197,6 +1242,7 @@ def run_DBB(NPV_THRESHOLD_DBB,
         _impatience = impatience[0] if env.now == 0 else AGENTS[env.now - 1][name]['impatience'][0]
         _rationale = rationale[0] if env.now == 0 else AGENTS[env.now - 1][name]['rationale'][0]
         _instrument = instrument[0] if env.now == 0 else AGENTS[env.now - 1][name]['instrument'][0]
+        _periodicity = periodicity[0] if env.now == 0 else AGENTS[env.now - 1][name]['periodicity'][0]
         LSS_tot = LSS_tot if env.now == 0 else AGENTS[env.now - 1][name]['LSS_tot']
         value = disclosed_var
         wallet = _wallet if not env.now % 12 == 0 else 0
@@ -1311,17 +1357,18 @@ def run_DBB(NPV_THRESHOLD_DBB,
                         accepted_tps.append(list(tp.keys())[0])
 
                 # print('dbb', env.now, thresh, accepted_tps, env.now/config.SIM_TIME)
-
+                # print(value)
                 if entry_instrument == 'finance':
                     # print('DBB is trying to finance')
 
-                    financing = financing_FF(genre, name, wallet, receivable, entry_value, financing_index,
+                    non_used_wallet = wallet - budget
+                    financing = financing_FF(genre, name, budget, receivable, entry_value, financing_index,
                                              accepted_source=entry_chosen_source, accepted_tps=accepted_tps,
                                              added_mwh=added_mwh)
 
-                    wallet = financing['wallet']
+                    wallet = financing['wallet'] + non_used_wallet
                     receivable = financing['receivables']
-                    added_mwh += financing['added_mwh']
+                    added_mwh = financing['added_mwh']
 
                 elif entry_instrument == 'guarantee':
                     """ We are dealing with guarantees """
@@ -1344,10 +1391,10 @@ def run_DBB(NPV_THRESHOLD_DBB,
         #                                                                                                             #
         ###############################################################################################################
 
-        if env.now > 2:
+        if env.now > 2 and env.now % _periodicity == 0:
             add_source = source_reporting_FF(name, _past_weight)
             for entry in range(len(source) - 1):
-                source[entry][list(source[entry].keys())[0]] *= (1 - _discount)
+                source[entry][list(source[entry].keys())[0]] *= (1 - _discount) ** _periodicity
                 source[entry][list(source[entry].keys())[0]] += add_source[list(source[entry].keys())[0]]
 
         ###############################################################################################################
@@ -1357,9 +1404,9 @@ def run_DBB(NPV_THRESHOLD_DBB,
         ###############################################################################################################
 
         if env.now > 0:
-            decision_var = max(0, min(1, public_deciding_FF(name)))
+            decision_var = max(0, min(1, public_deciding_FF(name)))  # if env.now % _periodicity == 0 else decision_var
             disclosed_var = thresholding_FF(_LSS_thresh, disclosed_var, decision_var)
-            decisions = evaluating_FF(name)
+            decisions = evaluating_FF(name) if env.now % _periodicity == 0 else {'verdict': 'keep', 'strikes': False, 'impatience_increase': 0}
             verdict = decisions['verdict']
             # print('strikes are', decisions['strikes'])
 
@@ -1394,8 +1441,9 @@ def run_DBB(NPV_THRESHOLD_DBB,
             "strikables_dict": strikables_dict,
             "current_state": current_stating_FF(_rationale),
             "LSS_tot": LSS_tot,
-            "interest_rate": 1+r-disclosed_var,
-            "accepted_tps": accepted_tps
+            "interest_rate": interesting_FF(disclosed_var),
+            "accepted_tps": accepted_tps,
+            "periodicity": periodicity
         }
 
         if env.now > 1:
@@ -1856,6 +1904,7 @@ def run_EP(env,
                         i['guarantee'] is not True or (i['guarantee'] is True and wallet >= Fee)
                 ) and i['BB'] != 'reinvestment':
                     """ if the plant is not guaranteed or if it's guaranteed but the EP has enough money to cover it """
+                    # print(env.now, name, Fee, wallet, i['r'], 'debt' in i, i['source'])
                     wallet -= Fee
                     i['debt'] -= Fee
 
@@ -2011,7 +2060,7 @@ def run_EP(env,
 
             mix_expansion = (remain + self_expansion * (1-cash_flow_RISK))  # / EP_NUMBER ** math.e ** (1-value)
 
-          # env.now, '_source', _source, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion, (1-cash_flow_RISK))
+            # print(env.now, '_source', _source, value, name, mix_expansion, "remain", remain, 'self_expansion', self_expansion, (1-cash_flow_RISK))
 
             # print(mix_expansion)
             # ic(mix_expansion,remain/ EP_NUMBER ** math.e ** (1-value), self_expansion/ EP_NUMBER ** math.e ** (1-value), value, _source) #  if env.now> config.FUSS_PERIOD else None
@@ -2051,7 +2100,7 @@ def run_EP(env,
             random.shuffle(tech)
 
             for i in tech:
-                if i['source'] == _source or ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or _source in config.AUCTION_WANTED_SOURCES:
+                if i['source'] == _source or ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or i['source'] in config.AUCTION_WANTED_SOURCES:
 
                     # print(source_price)
                     # Lumps = min(max(1, np.ceil(mix_expansion / i['MW'])), max_lump[_source])
@@ -2062,15 +2111,15 @@ def run_EP(env,
                         # print('not')
                         Lumps = min(np.ceil(wallet * value / i['CAPEX']), Lumps)
 
-                    # print(Lumps)
-
                     if Lumps < 1 and not (('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or i['source'] in config.AUCTION_WANTED_SOURCES):
                         # we want to contract less than a single lump of investment
-                        # print('break stuff')
+                        # print('breakf stuff')
                         continue
                     elif Lumps < 1 and ('BNDES' in AGENTS[env.now - 1] and i['name'] in AGENTS[env.now - 1]['BNDES']['accepted_tps']) or i['source'] in config.AUCTION_WANTED_SOURCES:
-                        Lumps = self_expansion # * (1-cash_flow_RISK)
+                        Lumps = min(np.ceil(self_expansion / i['MW']), max_lump[i['source']])  # * (1-cash_flow_RISK)
                         # print('when the levee breaks')
+
+                    # print('Lumps', Lumps)
 
                     if len(MIX[env.now-1]) == 0:
                         source_price = config.STARTING_PRICE
@@ -2137,6 +2186,7 @@ def run_EP(env,
                                             random.shuffle(source)
                                             if list(source[0].keys())[0] == i['source']:
                                                 # print('redux')
+                                                LSS_tot += 1
                                                 break
                                     else:
                                         impatience[0] = impatience[0]+1  # if impatience[0]-1 > 0 else AGENTS[0][name][impatience[0]]
@@ -2146,6 +2196,7 @@ def run_EP(env,
 
                     if cond is True and NPV >= 0 and (NPV > _TP['NPV'] or
                                                       random.uniform(0, 1) < config.INITIAL_RANDOMNESS):
+                        # print('worked')
                         _TP.update({
                             'TP': i['name'],
                             'NPV': NPV,
@@ -2467,6 +2518,14 @@ def run_DD(env,
         """ since the policy makers act after private agents, they are looking at the env.now, not the env.now-1 """
         demand = DEMAND.copy()[env.now] * 24 * 30
         price = config.STARTING_PRICE
+
+        chosen = []
+        installed_MWh = 0
+        _Price_list = []
+        _MWhs = []
+        risk_dict = {0: 0, 1: 0, 2: 0}
+        risk = 'price'
+
         if env.now > 0 and len(MIX[env.now]) > 0:
 
             """ 
@@ -2481,8 +2540,6 @@ def run_DD(env,
 
             # possible_projects = sorted(possible_projects, reverse=True, key=lambda x: x['auction_contracted'])
             # print(possible_projects)
-            chosen = []
-            installed_MWh = 0
             # print('full demand is ', demand)
             for plant in possible_projects:
                 """if plant['TP'] in AGENTS[env.now-1]['BNDES']['accepted_tps']:
@@ -2527,11 +2584,10 @@ def run_DD(env,
                 price = AGENTS[env.now-1]['DD']['Price']
                 # print(env.now, 'zero price, no thermal contracted')
 
-            _Price_list = []
-            _MWhs = []
+            _price = round(price, 3)
             for _ in MIX[env.now]:
                 i = MIX[env.now][_]
-                _price = round(price, 3)
+
                 if i['status'] == 'contracted':
                     """ if the plant is auction contracted, then we do not mess with its price"""
                     if 'auction_contracted' in i and i['auction_contracted'] is True:
@@ -2554,8 +2610,7 @@ def run_DD(env,
             # print(env.now, "_Price", _Price, "price", price)
             # ic(env.now, increase, demand, DEMAND[env.now], _Price)
 
-            risk_dict = {0: 0, 1: 0, 2: 0}
-            risk = 'price'
+
             if risk == 'demand':
                 total_MWh = installed_MWh  # sum(Demand_by_source.values())
                 for source in list(risk_dict.keys()):
@@ -2564,7 +2619,7 @@ def run_DD(env,
                 for source in list(risk_dict.keys()):
                     risk_dict[source] = max_percentage - risk_dict[source]
                     config.RISKS[source] = risk_dict[source]
-                config.RISKS[source] = risk_dict[source]
+                # config.RISKS[source] = risk_dict[source]
                 # print(config.RISKS)
 
             elif risk == 'source':
@@ -2617,7 +2672,14 @@ def run_DD(env,
                 print('now demand is', DEMAND[env.now])"""
 
         if env.now == config.SIM_TIME - 3:
-            print('supply was', DEMAND.copy()[env.now] * 24 * 30 - demand, "with excess of ", -demand, "at a price of", _Price)
+
+            if len(_MWhs) == 0:
+                _MWhs = [0]
+            try:
+                print('supply was', sum(_MWhs), "with excess of ", -demand, "at a price of", _Price, 'with a renewable to fossil ratio of', (Demand_by_source[1]+Demand_by_source[2])/Demand_by_source[0])
+            except:
+                print('supply was', sum(_MWhs), "with excess of ", -demand, "at a price of", _Price,
+                      'without fossil generation')
 
         # print(env.now, _Price, price)
 
@@ -2634,25 +2696,31 @@ def run_DD(env,
 
 
 class Hetero(object):
-    def __init__(self, env, hetero_threshold):
+    def __init__(self, env, threshold, heterogeneous, check):
         self.env = env
         self.genre = 'HH'
         self.name = 'HH'
-        self.hetero_threshold = hetero_threshold
+        self.threshold = threshold
         self.randomly = True  # False if config.INITIAL_RANDOMNESS < 1 else True  # just to put more emphasis on the
         # randomness of the random runs
+        self.heterogeneous = heterogeneous
+        self.check = check
         self.action = env.process(run_HH(self.env,
                                          self.genre,
                                          self.name,
-                                         self.hetero_threshold,
-                                         self.randomly))
+                                         self.threshold,
+                                         self.randomly,
+                                         self.heterogeneous,
+                                         self.check))
 
 
 def run_HH(env,
            genre,
            name,
-           hetero_threshold,
-           randomly
+           threshold,
+           randomly,
+           heterogeneous,
+           check
            ):
     CONTRACTS, MIX, AGENTS, TECHNOLOGIC, r, DEMAND, MARGIN,  EP_NUMBER, env = config.CONTRACTS, config.MIX, config.AGENTS, config.TECHNOLOGIC, config.r, config.DEMAND, config.MARGIN, config.EP_NUMBER, config.env
 
@@ -2673,7 +2741,12 @@ def run_HH(env,
             if agent['genre'] in ['DBB', 'EPM', 'TPM']:
                 list_of_pm.append(agent['name'])
 
-        if len(list_of_pm) > 1 and env.now > 0:
+        # periodicity = np.median([AGENTS[env.now][x]['periodicity'][0] for x in list_of_pm])
+        # print(periodicity)
+
+        periodicity = 3
+
+        if len(list_of_pm) > 1 and env.now > config.FUSS_PERIOD and env.now % periodicity == 0:
 
             # That means we have more than two policy makers
 
@@ -2687,10 +2760,21 @@ def run_HH(env,
             # on the agents dictionary
 
             # above the threshold, so we have to homogenize things
-            list_o_entries = ['source',
+
+            list_o_entries = []
+
+            if check == 'policymaking' or check == 'all':
+                list_o_entries += ['memory', 'LSS_thresh', 'past_weight', 'periodicity', 'disclosed_thresh']
+
+            if check == 'policy' or check == 'all':
+                list_o_entries += ['disclosed_var', 'source'] # , 'rationale', -> we can't change rationale, otherwise the satisficing score of policy makers become really bizarre
+                """if heterogeneous is True:
+                    list_o_entries += ['source']"""
+
+            """list_o_entries = ['source',
                               'disclosed_var',
                               'LSS_thresh',
-                              'disclosed_thresh']
+                              'disclosed_thresh']"""
 
             chosen_entries = set()
             agent = AGENTS[env.now]
@@ -2701,27 +2785,43 @@ def run_HH(env,
                         if agent[list_of_pm[number]][entry] != agent[list_of_pm[number+1]][entry]:
                             # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
                             chosen_entries.add(entry)
+                            # they are the same
+                        elif round(agent[list_of_pm[number]][entry], 1) == round(agent[list_of_pm[number+1]][entry], 1):
+                            if heterogeneous is True:
+                                # they shouldn't be
+                                chosen_entries.add(entry)
 
                     elif entry == 'source':
                         if list(agent[list_of_pm[number]][entry][0].keys()) != list(agent[list_of_pm[number+1]][entry][0].keys()):
                             # print(AGENTS[env.now]['BNDES'][entry], AGENTS[env.now]['EPM'][entry])
                             chosen_entries.add(entry)
+                        else:
+                            # they are the same
+                            if heterogeneous is True:
+                                # they shouldn't be
+                                chosen_entries.add(entry)
 
                     else:
                         if agent[list_of_pm[number]][entry][0] != agent[list_of_pm[number+1]][entry][0]:
                             # print(AGENTS[env.now]['BNDES'][entry][0], AGENTS[env.now]['EPM'][entry][0])
                             chosen_entries.add(entry)
+                        else:
+                            # they are the same
+                            if heterogeneous is True:
+                                # they shouldn't be
+                                chosen_entries.add(entry)
 
             chosen_entries = [elem for elem in chosen_entries]
 
-            if len(chosen_entries) > 0 and len(chosen_entries)/len(list_o_entries) > hetero_threshold and random.uniform(0, 1) > hetero_threshold:
+            if len(chosen_entries) > 0 and len(chosen_entries)/len(list_o_entries) > threshold:
+                # print('homo')
                 # above the threshold and above the heterogeneity test, so we have to homogenize things
                 random.shuffle(chosen_entries)  # it must be random which ones go first
                 ratio = len(chosen_entries)/len(list_o_entries)
                 for entry in chosen_entries:
                     current = {}
                     previous = {}
-                    if env.now > 0 and ratio > hetero_threshold:
+                    if env.now > 0 and ratio > threshold:
                         ratio -= 1/len(list_o_entries)
                         chchchanges += 1
 
@@ -2738,17 +2838,31 @@ def run_HH(env,
 
                     else:
                         for name in list_of_pm:
-                            current[name] = previous[name] = 0
+                            current[name] = random.uniform(0, 100)
+                            previous[name] = random.uniform(0, 100)
 
                     who = []
 
-                    for name in list_of_pm:
-                        if current[name] != previous[name]:
-                            who.append(name)
+                    if entry == 'source' and heterogeneous is True and len(list_of_pm)>2:
+                        sources = []
+                        for name in list_of_pm:
+                            current_source = list(agent[name][entry][0].keys())[0]
+                            sources.append(current_source)
+
+                        if np.std(sources) == 0:
+                            # std zero means that they are the same source
+                            who = list_of_pm
+
+                    else:
+                        for name in list_of_pm:
+                            if current[name] == previous[name]:
+                                who.append(name)
+
+                    # If nobody changed, then we really don't have to do nothing
 
                     if len(who) > 0:
                         # someone changed
-
+                        who = list_of_pm
                         if randomly is True or len(who) > 1 or len(list_of_pm) == 3:
                             # If random is True, then it is randomized
                             # If more than one policy maker changed, then it really doesn't matter who follows who
@@ -2757,7 +2871,7 @@ def run_HH(env,
                             It is best to just copy the whole list to avoid destroying entries
                             """
 
-                            chosen_agent = random.choice(who)
+                            chosen_agent = random.choice(list_of_pm)
                             chosen = agent[chosen_agent][entry]
                             if entry == 'source':
                                 chosen_source = list(chosen[0].keys())[0]
@@ -2770,20 +2884,42 @@ def run_HH(env,
 
                             else:
                                 if entry == 'disclosed_var':
-                                    max_chosen = 0
-                                    # discloseds = []
+                                    # max
+                                    """max_chosen = 0
+                                    
                                     for name in 2*list_of_pm:
                                         max_chosen = max(max_chosen, agent[name][entry])
-                                        agent[name][entry] = max_chosen
-                                    """for name in list_of_pm:
-                                        discloseds.append(agent[name][entry])
+                                        agent[name][entry] = max_chosen"""
+                                    # mean
+                                    discloseds = []
                                     for name in list_of_pm:
-                                        agent[name][entry] = np.max(discloseds)"""
-                                    # print('homo', env.now, agent[name][entry])
+                                        discloseds.append(agent[name][entry])
+                                    if heterogeneous is False:
+                                        # print('homo!')
+                                        for name in who:
+                                            # agent[name][entry] = np.mean(discloseds)
+                                            _median = np.median(discloseds)
+                                            agent[name][entry] = np.mean([agent[name][entry], _median])
+                                            # print("median", _median, agent[name][entry], name)
+                                        # print('homo', env.now, agent[name][entry])
+                                    else:
+
+                                        # print('hetero!')
+
+                                        for name in who:
+                                            # noinspection PyTypeChecker
+                                            new_discloseds = []
+                                            var = random.uniform(agent[name][entry] - agent[name]['disclosed_thresh'][0],
+                                                                 agent[name][entry] + agent[name]['disclosed_thresh'][0])
+                                            agent[name][entry] = min(max(0, var), 1)
+                                            # print('median', agent[name][entry], name, env.now)
                                 else:
                                     for name in list_of_pm:
-                                        if name != chosen_agent:
-                                            agent[name][entry] = chosen
+                                        if heterogeneous is False:
+                                            if name != chosen_agent:
+                                                agent[name][entry] = chosen
+                                        else:
+                                            random.shuffle(agent[name][entry])
 
                         # If it's not random, then we have to change to the least updated one
                         else:
@@ -2797,22 +2933,22 @@ def run_HH(env,
                                       list(agent[name][entry][0].keys())[0]) and name != who:
                                     name[name][entry] = name[who][entry][::-1]
 
-                LSS_guys = []
+                """LSS_guys = []
 
                 for name in list_of_pm:
-                    if AGENTS[env.now][name]['LSS_tot'] > AGENTS[env.now - 1][name]['LSS_tot']:
-                        LSS_guys.append(name)
+                    if AGENTS[env.now][name]['LSS_tot'] != AGENTS[env.now - 1][name]['LSS_tot']:
+                        LSS_guys.append(name)"""
 
                 # bndes_lss_cond = AGENTS[env.now]['BNDES']['LSS_tot'] > AGENTS[env.now - 1]['BNDES']['LSS_tot']
                 # epm_lss_cond = AGENTS[env.now]['EPM']['LSS_tot'] > AGENTS[env.now - 1]['EPM']['LSS_tot']
-                if len(LSS_guys) > 1:
+                """if len(LSS_guys) > 1:
                     # if both policy makers adapted, then it really doesn't matter who we decrease the LSS count
                     random.shuffle(list_of_pm) # we have to randomize who will decrease the LSS
 
                     for number in range(1, len(list_of_pm)):
                         # print(list_of_pm),
                         # print(number)
-                        agent[list_of_pm[number]]['LSS_tot'] -= 1
+                        agent[list_of_pm[number]]['LSS_tot'] -= 1"""
 
                 """elif bndes_lss_cond is True or epm_lss_cond is True:
                     # if just one adapted, then we decrease its LSS
@@ -2870,9 +3006,16 @@ def make_ep(env,
         name = 'EP_' + str(uuid.uuid4().hex)
 
     if wallet is None:
+        from __init__ import config_name
+        if "NO_NO_NO" in config_name or "NO_YES_NO" in config_name or "NO_NO_YES" in config_name or "NO_YES_YES" in config_name:
+            magnitude = random.triangular(4, 7, 8)
+        else:
+            magnitude = random.triangular(2, 4, 6)
+        # print(magnitude)
+
         # wallet = random.normalvariate(config.THERMAL['CAPEX'] * int(1500/config.THERMAL['MW']), .1)
-        wallet = random.uniform(10, 30)*10**6
-        # print(wallet)
+        wallet = random.normalvariate(0, 1) * 20 * 10 ** magnitude  # random.uniform(10, 30)*10**4
+        # print(name, wallet)
     if decision_var is None:
         decision_var = random.uniform(0, 1)
     if current_weight is None:
@@ -2925,7 +3068,7 @@ def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_thresho
         source = random.choice([1, 2])
 
     if wallet is None:
-        wallet = random.uniform(10, 30)*10**6 if source == 1 else random.uniform(1, 2)*10**6
+        wallet = random.normalvariate(0, 1)* 200*10**4 if source == 1 else random.normalvariate(0, 1)* 20*10**4
 
     if capacity is None:
         capacity = random.uniform(1, 2)*10**6 if source == 1 else random.uniform(0, 1)*10**6
@@ -2946,13 +3089,13 @@ def make_tp(env, name=None, wallet=None, capacity=None, source=None, RnD_thresho
         impatience = [int(random.uniform(1, 5))]
 
     if past_weight is None:
-        past_weight = random.sample([0.25, 0.5, 0.75], 2)
+        past_weight = random.sample([.25, .5, .75, .1, .9], 5)
 
     if LSS_thresh is None:
-        LSS_thresh = random.sample([0.25, 0.5, 0.75], 2)
+        LSS_thresh = random.sample([.25, .5, .75, .1, .9], 5)
 
     if memory is None:
-        memory = [int(random.uniform(3, 24))]
+        memory = [int(random.uniform(12, 48))]
 
     if discount is None:
         discount = [random.uniform(0.00001, 0.0001)]

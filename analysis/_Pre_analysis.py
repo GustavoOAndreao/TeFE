@@ -229,7 +229,7 @@ if __name__ == '__main__':
     except:
         None
 
-    # list_of_dirs = ['1_NO_NO'] # ['0_YES_YES']  # uncomment and put the directory name to override checking all directories
+    # list_of_dirs = ["1_YES_YES_YES"]  # ['0_YES_YES']  # uncomment and put the directory name to override checking all directories
 
     for path in list_of_dirs:  # ['ALL_NO_NO', 'ALL_NO_YES', 'ALL_YES_NO', 'ALL_YES_YES']:
         path_to_json = 'analysis/..'
@@ -276,11 +276,17 @@ if __name__ == '__main__':
         for type_o_run in runs:
             files = json_files if type_o_run == 'normal' else random_json_files
             for type_o_dict in ['technologic', 'agents']:  # 'mix', 'contracts']:
-                print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
-                concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict , path, _format)
+                try:
+                    print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
+                    concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict , path, _format)
+                except:
+                    print("Couldn't do it my ganzirosis, try again for the", type_of_dict)
             for type_o_dict in ['mix', 'contracts']:
-                print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
-                concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict, path, _format)  # , big_files=True)
+                try:
+                    print('STARTING ' + path.upper() + ' ' + type_o_run.upper() + " " + type_o_dict.upper() + ' FILES')
+                    concat_csvs(files, type_o_dict, type_o_run + "_" + type_o_dict, path, _format)  # , big_files=True)
+                except:
+                    print("Couldn't do it my ganzirosis, try again for the", type_of_dict)
 
     duration = 1500  # milliseconds
     freq = 660  # Hz

@@ -60,6 +60,7 @@ def run_sim(_seed, _name='test', random_run=False):
     # config = importlib.import_module('_config____1_YES_YES')
     # config = __import__('_config____1_YES_YES')
     # caching.clear_cache()
+    import config
 
     # del sys.modules['config']
 
@@ -73,11 +74,11 @@ def run_sim(_seed, _name='test', random_run=False):
     # reload(__import__('_config____1_YES_YES')) if _seed > start_seed else None  # need to reload the file
     # importlib.invalidate_caches()
     reload(config) if _seed > start_seed else None  # need to reload the file
-    reload(sys.modules[__init__.config_name[0]]) if _seed > start_seed else None
-    sys.modules[__init__.config_name[0]] = config
+    # reload(sys.modules[__init__.config_name[0]]) if _seed > start_seed else None
+    # sys.modules[__init__.config_name[0]] = config
 
     # print('run', __init__.config_name[0], config.config_name)
-    # import config
+    import config
     #
     # config = importlib.import_module('config')
 
@@ -96,15 +97,20 @@ def run_sim(_seed, _name='test', random_run=False):
     import agents
 
     reload(agents) if _seed > start_seed else None  # we also need to reload the agents
-    config.agents_name = __init__.agents_name[0]
+    # config.agents_name = __init__.agents_name[0]
     # reload(__import__('_agents____1_YES_YES')) if _seed > start_seed else None  # we also need to reload the agents
     # agents = importlib.import_module('_agents____1_YES_YES')
     # print(vars(config))
-    sys.modules[__init__.agents_name[0]] = agents
+    import agents
+    # sys.modules[__init__.agents_name[0]] = agents
+
+    print(config.name)
 
     simulation_time = config.SIM_TIME if _seed != start_seed else 3  # config.SIM_TIME if _seed != start_seed else 3
 
     # RUNNING
+
+    _name = config.name
 
     config.env.run(until=simulation_time)
     # print(_seed,  start_seed)
@@ -235,16 +241,17 @@ if __name__ == '__main__':
     import __init__
     reload(__init__)
 
-    __init__.config_name = {0: '_config____' + file}
+    # __init__.config_name = {0: '_config____' + file}
+    __init__.config_name = file
     # print('main', __init__.config_name)
-    __init__.agents_name = {0: '_agents____' + file}
+    # __init__.agents_name = {0: '_agents____' + file}
 
     # config = __import__('_config____1_YES_YES')
     # agents = __import__('_agents____1_YES_YES')
     from config import name
     # print('WE SHALL START THE ' + name + ' RUNS')
 
-    import config
+    # import config
 
     """
     First simulation runs a little bizarre, so we always ignore it
@@ -252,7 +259,7 @@ if __name__ == '__main__':
 
     list_o_runs = [False]  # , True]  # both runs  # True is random, False is normal
 
-    start_seed = 0  # remember: we skip it
+    start_seed = 44  # remember: we skip it
 
     for seed in range(start_seed, RUN_TIMES + 1):
         for type_o_run in list_o_runs:
